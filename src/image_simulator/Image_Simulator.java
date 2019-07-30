@@ -5,11 +5,13 @@
  */
 package image_simulator;
 
+import Binary.BinaryMaker;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.ImageStack;
 import ij.plugin.GaussianBlur3D;
 import ij.plugin.ImageCalculator;
+import ij.process.AutoThresholder;
 import ij.process.ByteProcessor;
 import ij.process.FloatProcessor;
 import ij.process.ImageProcessor;
@@ -37,7 +39,7 @@ public class Image_Simulator {
 
     double I0, sigma = 2.0, Iback = 1000, A = 10.0, B = 5.0, C = 5.0;
     double eps = 0.1, gam = 20.0;
-
+    double distanceThreshold = 90.0;
     int maxframe;
 
     float PI = 3.14159265358979323846f;
@@ -109,53 +111,18 @@ public class Image_Simulator {
 
         simulation(a, tmax, output);
 
-        ImageStack pointOutput = new ImageStack(nx, ny);
-        for (int n = 1; n <= nz; n++) {
-            ByteProcessor slice = new ByteProcessor(nx, ny);
-            slice.setValue(0.0);
-            slice.fill();
-            pointOutput.addSlice(slice);
-        }
-        for (i = 0; i < N; i++) {
-            int x = (int) Math.round(a[i].getX() / px);
-            int y = (int) Math.round(a[i].getY() / py);
-            int z = (int) Math.round(a[i].getZ() / pz);
-            pointOutput.setVoxel(x, y, z, 255);
-        }
-        ImageHandler intImage = ImageInt.wrap(pointOutput);
-        intImage.setScale(px, pz, "microns");
-        ImageHandler edt = EDT.run(intImage, 1, true, -1);
+        ImageHandler pointImage = generatePointImage(nx, ny, nz, a);
+        ImageHandler edt = EDT.run(pointImage, 1, true, -1);
         ImageHandler edtDup = edt.duplicate();
         float edtMaxValue = (float) edtDup.getMax();
         edtDup.invert();
         edtDup.addValue(edtMaxValue + 1.0f);
-        Watershed3D watershed = new Watershed3D(edtDup, intImage, 90.0, 1);
+        Watershed3D watershed = new Watershed3D(edtDup, pointImage, distanceThreshold, 1);
         ImageInt lineImage = watershed.getDamImage();
-        ImageStack thresholdedEDT = new ImageStack(nx, ny);
-        for (i = 1; i <= nz; i++) {
-            ImageProcessor slice = edtDup.getImageStack().getProcessor(i);
-            slice.setThreshold(0.0, 90.0, ImageProcessor.NO_LUT_UPDATE);
-            slice = slice.createMask();
-            assert (slice instanceof ByteProcessor);
-            ((ByteProcessor) slice).outline();
-            slice.invert();
-            thresholdedEDT.addSlice(slice);
-        }
-        ImagePlus voronoiPlusMaskOutline = (new ImageCalculator()).run("Add create stack", new ImagePlus("", thresholdedEDT), lineImage.getImagePlus());
-        ImageStack voronoiPlusMaskOutlineStack = new ImageStack(nx, ny);
-        for (i = 1; i <= nz; i++) {
-            ImageProcessor slice = voronoiPlusMaskOutline.getImageStack().getProcessor(i).convertToFloatProcessor();
-            slice.multiply(1.0 / 255.0);
-//            slice.add(Iback);
-            voronoiPlusMaskOutlineStack.addSlice(slice);
-        }
+        ImageStack thresholdedEDT = getVoronoiImage(nx, ny, nz, edtDup, distanceThreshold);
+        ImageStack voronoiPlusMaskOutlineStack = getVoronoiPlusMaskOutline(nx, ny, nz, thresholdedEDT, lineImage);
         addNoise(output);
-        ImagePlus voronoiPlusEDT = (new ImageCalculator()).run("Multiply create stack", new ImagePlus("", voronoiPlusMaskOutlineStack), edt.getImagePlus());
-        for (i = 1; i <= nz; i++) {
-            ImageProcessor slice = voronoiPlusEDT.getImageStack().getProcessor(i);
-            slice.add(1.0);
-//            slice.multiply(100.0);
-        }
+        ImagePlus voronoiPlusEDT = getVoronoiPlusEDT(nz, voronoiPlusMaskOutlineStack, edt);
         GaussianBlur3D.blur(voronoiPlusEDT, 2.5 / px, 2.5 / py, 2.5 / pz);
         addNoise(voronoiPlusEDT.getImageStack());
         IJ.saveAs(voronoiPlusEDT, "TIF", "D:/debugging/SimImages/voronoiPlusMaskOutline_stack.tif");
@@ -302,6 +269,61 @@ public class Image_Simulator {
             IJ.error("A thread was interrupted during output generation.");
         }
 
+    }
+
+    ImageHandler generatePointImage(int nx, int ny, int nz, Nucleus[] a) {
+        ImageStack pointOutput = new ImageStack(nx, ny);
+        for (int n = 1; n <= nz; n++) {
+            ByteProcessor slice = new ByteProcessor(nx, ny);
+            slice.setValue(0.0);
+            slice.fill();
+            pointOutput.addSlice(slice);
+        }
+        for (int i = 0; i < N; i++) {
+            int x = (int) Math.round(a[i].getX() / px);
+            int y = (int) Math.round(a[i].getY() / py);
+            int z = (int) Math.round(a[i].getZ() / pz);
+            pointOutput.setVoxel(x, y, z, 255);
+        }
+        ImageHandler intImage = ImageInt.wrap(pointOutput);
+        intImage.setScale(px, pz, "microns");
+        return intImage;
+    }
+
+    ImageStack getVoronoiImage(int nx, int ny, int nz, ImageHandler edt, double threshold) {
+        ImageStack thresholdedEDT = new ImageStack(nx, ny);
+        for (int i = 1; i <= nz; i++) {
+            ImageProcessor slice = edt.getImageStack().getProcessor(i);
+            slice.setThreshold(0.0, threshold, ImageProcessor.NO_LUT_UPDATE);
+            slice = slice.createMask();
+            assert (slice instanceof ByteProcessor);
+            ((ByteProcessor) slice).outline();
+            slice.invert();
+            thresholdedEDT.addSlice(slice);
+        }
+        return thresholdedEDT;
+    }
+
+    ImageStack getVoronoiPlusMaskOutline(int nx, int ny, int nz, ImageStack thresholdedEDT, ImageHandler lineImage) {
+        ImagePlus voronoiPlusMaskOutline = (new ImageCalculator()).run("Add create stack", new ImagePlus("", thresholdedEDT), lineImage.getImagePlus());
+        ImageStack voronoiPlusMaskOutlineStack = new ImageStack(nx, ny);
+        for (int i = 1; i <= nz; i++) {
+            ImageProcessor slice = voronoiPlusMaskOutline.getImageStack().getProcessor(i).convertToFloatProcessor();
+            slice.multiply(1.0 / 255.0);
+//            slice.add(Iback);
+            voronoiPlusMaskOutlineStack.addSlice(slice);
+        }
+        return voronoiPlusMaskOutlineStack;
+    }
+
+    ImagePlus getVoronoiPlusEDT(int nz, ImageStack voronoiPlusMaskOutlineStack, ImageHandler edt) {
+        ImagePlus voronoiPlusEDT = (new ImageCalculator()).run("Multiply create stack", new ImagePlus("", voronoiPlusMaskOutlineStack), edt.getImagePlus());
+        for (int i = 1; i <= nz; i++) {
+            ImageProcessor slice = voronoiPlusEDT.getImageStack().getProcessor(i);
+            slice.add(1.0);
+//            slice.multiply(100.0);
+        }
+        return voronoiPlusEDT;
     }
 
     void addNoise(ImageStack stack) {
