@@ -26,22 +26,19 @@ import org.apache.commons.math3.distribution.GammaDistribution;
  */
 public class Image_Simulator {
 
-    double Dx, Dy, Dz; //Diffusion coefficient in x, y, and z directions
-    double DT; //time grid for SDE
+    double Dx = 0.0, Dy = 0.0, Dz = 0.0; //Diffusion coefficient in x, y, and z directions
+    double DT = 0.01; //time grid for SDE
 
     double px, py, pz; //pixel size in x, y, and z axis
-    int nx, ny, nz; //number of pixels in x, y and z axis
 
-    double framerate; //frame rate of images
+    double framerate = 1.0; //frame rate of images
 
     double Lx, Ly, Lz; //domain size
 
-    double I0, sigma, Iback, A, B, C;
-    double eps, gam;
+    double I0, sigma = 2.0, Iback = 1000, A = 10.0, B = 5.0, C = 5.0;
+    double eps = 0.1, gam = 20.0;
 
     int maxframe;
-
-    int N = 20;
 
     float PI = 3.14159265358979323846f;
 
@@ -49,7 +46,9 @@ public class Image_Simulator {
 
     static int count_BM = 0;
 
-    double SNR = 3.0;
+    double SNR = 2.0;
+
+    int N = 10 + r.nextInt(25);
 
     /**
      * @param args the command line arguments
@@ -61,49 +60,29 @@ public class Image_Simulator {
 
     public Image_Simulator() {
         Nucleus[] a = new Nucleus[N];
-
         int tmax;
         int i;
 
-        double Im;
-
-        DT = 0.01;
         tmax = (int) Math.round(1.5 / DT);
 
-        //diffusion constant of objects
-        Dx = 0.0;
-        Dy = 0.0;
-        Dz = 0.0;
-
-        framerate = 1.0;
-
-        Im = 20000; //mean intensity in nucleus
-        Iback = 1000; //mean background intensity
-        sigma = 2.0;
+        double Im = 20000; //mean intensity in nucleus
 
         I0 = Im - Iback;
 
-        A = 10.0;
-        B = 5.0;
-        C = 5.0;
-
-        eps = 0.1;
-        gam = 20.0;
-
         //voxel size
-        px = 0.0962000;
-        py = 0.0962000;
-        pz = 0.8398000;
+        px = 0.0962000 * 10;
+        py = 0.0962000 * 10;
+        pz = 0.8398000 * 10;
 
         //imaging domain size
-        Lx = 98.51; // microns
-        Ly = 98.51; //microns
-        Lz = 55.4268; //microns
+        Lx = 150; // microns
+        Ly = 150; //microns
+        Lz = 200.0; //microns
 
         //number of pixels in each direction
-        nx = (int) Math.round(Lx / px);
-        ny = (int) Math.round(Ly / py);
-        nz = (int) Math.round(Lz / pz);
+        int nx = (int) Math.round(Lx / px);
+        int ny = (int) Math.round(Ly / py);
+        int nz = (int) Math.round(Lz / pz);
 
         ImageStack output = new ImageStack(nx, ny);
         for (int n = 1; n <= nz; n++) {
@@ -150,12 +129,12 @@ public class Image_Simulator {
         float edtMaxValue = (float) edtDup.getMax();
         edtDup.invert();
         edtDup.addValue(edtMaxValue + 1.0f);
-        Watershed3D watershed = new Watershed3D(edtDup, intImage, 35.0, 1);
+        Watershed3D watershed = new Watershed3D(edtDup, intImage, 90.0, 1);
         ImageInt lineImage = watershed.getDamImage();
         ImageStack thresholdedEDT = new ImageStack(nx, ny);
         for (i = 1; i <= nz; i++) {
             ImageProcessor slice = edtDup.getImageStack().getProcessor(i);
-            slice.setThreshold(0.0, 35.0, ImageProcessor.NO_LUT_UPDATE);
+            slice.setThreshold(0.0, 90.0, ImageProcessor.NO_LUT_UPDATE);
             slice = slice.createMask();
             assert (slice instanceof ByteProcessor);
             ((ByteProcessor) slice).outline();
@@ -175,9 +154,9 @@ public class Image_Simulator {
         for (i = 1; i <= nz; i++) {
             ImageProcessor slice = voronoiPlusEDT.getImageStack().getProcessor(i);
             slice.add(1.0);
-            slice.multiply(100.0);
+//            slice.multiply(100.0);
         }
-        GaussianBlur3D.blur(voronoiPlusEDT, 1.0 / px, 1.0 / py, 1.0 / pz);
+        GaussianBlur3D.blur(voronoiPlusEDT, 2.5 / px, 2.5 / py, 2.5 / pz);
         addNoise(voronoiPlusEDT.getImageStack());
         IJ.saveAs(voronoiPlusEDT, "TIF", "D:/debugging/SimImages/voronoiPlusMaskOutline_stack.tif");
 //        IJ.saveAs(new ImagePlus("", thresholdedEDT), "TIF", "D:/debugging/SimImages/thresholded_edt_stack.tif");
@@ -326,20 +305,18 @@ public class Image_Simulator {
     }
 
     void addNoise(ImageStack stack) {
-        int size = stack.getSize();
-        int width = stack.getWidth();
-        int height = stack.getHeight();
-        double snr2 = SNR * SNR;
-        for (int z = 1; z <= size; z++) {
-            ImageProcessor slice = stack.getProcessor(z);
-            for (int y = 0; y < height; y++) {
-                for (int x = 0; x < width; x++) {
-                    double I0 = slice.getPixelValue(x, y);
-                    double w = I0 / snr2;
-                    GammaDistribution dist = new GammaDistribution(snr2, w);
-                    slice.putPixelValue(x, y, dist.sample());
-                }
+        int nbCPUs = Runtime.getRuntime().availableProcessors();
+        NoiseThread[] noiseThreads = new NoiseThread[nbCPUs];
+        for (int thread = 0; thread < nbCPUs; thread++) {
+            noiseThreads[thread] = new NoiseThread(thread, nbCPUs, stack);
+            noiseThreads[thread].start();
+        }
+        try {
+            for (int thread = 0; thread < nbCPUs; thread++) {
+                noiseThreads[thread].join();
             }
+        } catch (InterruptedException ie) {
+            IJ.error("A thread was interrupted during output generation.");
         }
     }
 
@@ -396,6 +373,36 @@ public class Image_Simulator {
                         }
                         intensity += intmax;
                         output.setVoxel(i, j, k, intensity);
+                    }
+                }
+            }
+        }
+    }
+
+    class NoiseThread extends Thread {
+
+        private final ImageStack stack;
+        private final int thread;
+        private final int nThreads;
+
+        public NoiseThread(int thread, int nThreads, ImageStack stack) {
+            this.thread = thread;
+            this.nThreads = nThreads;
+            this.stack = stack;
+        }
+
+        public void run() {
+            int width = stack.getWidth();
+            int height = stack.getHeight();
+            double snr2 = SNR * SNR;
+            for (int z = thread + 1; z <= stack.getSize(); z += nThreads) {
+                ImageProcessor slice = stack.getProcessor(z);
+                for (int y = 0; y < height; y++) {
+                    for (int x = 0; x < width; x++) {
+                        double I0 = slice.getPixelValue(x, y);
+                        double w = I0 / snr2;
+                        GammaDistribution dist = new GammaDistribution(snr2, w);
+                        slice.putPixelValue(x, y, dist.sample());
                     }
                 }
             }
