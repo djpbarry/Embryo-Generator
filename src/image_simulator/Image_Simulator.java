@@ -5,16 +5,15 @@
  */
 package image_simulator;
 
-import Binary.BinaryMaker;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.ImageStack;
 import ij.plugin.GaussianBlur3D;
 import ij.plugin.ImageCalculator;
-import ij.process.AutoThresholder;
 import ij.process.ByteProcessor;
 import ij.process.FloatProcessor;
 import ij.process.ImageProcessor;
+import java.io.File;
 import java.util.Random;
 import mcib3d.image3d.ImageHandler;
 import mcib3d.image3d.ImageInt;
@@ -31,7 +30,7 @@ public class Image_Simulator {
     double Dx = 0.0, Dy = 0.0, Dz = 0.0; //Diffusion coefficient in x, y, and z directions
     double DT = 0.01; //time grid for SDE
 
-    double px, py, pz; //pixel size in x, y, and z axis
+    final double px, py, pz; //pixel size in x, y, and z axis
 
     double framerate = 1.0; //frame rate of images
 
@@ -48,19 +47,31 @@ public class Image_Simulator {
 
     static int count_BM = 0;
 
-    double SNR = 2.0;
+    double SNR = 1.5;
 
     int N = 10 + r.nextInt(25);
+
+    private final String outputDir;
 
     /**
      * @param args the command line arguments
      */
     public static void main(String[] args) {
-        new Image_Simulator();
+        double px = Double.parseDouble(args[0]);
+        double py = Double.parseDouble(args[1]);
+        double pz = Double.parseDouble(args[2]);
+        (new Image_Simulator(new double[]{px, py, pz}, args[3])).run();
         System.exit(0);
     }
 
-    public Image_Simulator() {
+    public Image_Simulator(double[] pixelSizes, String outputDir) {
+        this.px = pixelSizes[0];
+        this.py = pixelSizes[1];
+        this.pz = pixelSizes[2];
+        this.outputDir = outputDir;
+    }
+
+    public void run() {
         Nucleus[] a = new Nucleus[N];
         int tmax;
         int i;
@@ -71,15 +82,10 @@ public class Image_Simulator {
 
         I0 = Im - Iback;
 
-        //voxel size
-        px = 0.0962000 * 10;
-        py = 0.0962000 * 10;
-        pz = 0.8398000 * 10;
-
         //imaging domain size
         Lx = 150; // microns
         Ly = 150; //microns
-        Lz = 200.0; //microns
+        Lz = 150; //microns
 
         //number of pixels in each direction
         int nx = (int) Math.round(Lx / px);
@@ -118,19 +124,20 @@ public class Image_Simulator {
         edtDup.invert();
         edtDup.addValue(edtMaxValue + 1.0f);
         Watershed3D watershed = new Watershed3D(edtDup, pointImage, distanceThreshold, 1);
-        ImageInt lineImage = watershed.getDamImage();
-        ImageStack thresholdedEDT = getVoronoiImage(nx, ny, nz, edtDup, distanceThreshold);
-        ImageStack voronoiPlusMaskOutlineStack = getVoronoiPlusMaskOutline(nx, ny, nz, thresholdedEDT, lineImage);
+        ImageInt watershedDams = watershed.getDamImage();
+        ImageStack thresholdedEDT = getThresholdedEDT(nx, ny, nz, edtDup, distanceThreshold);
+        ImageStack edtOutline = outlineMask(nx, ny, nz, thresholdedEDT);
+        ImageStack voronoiPlusMaskOutline = getVoronoiPlusMaskOutline(nx, ny, nz, edtOutline, watershedDams);
         addNoise(output);
-        ImagePlus voronoiPlusEDT = getVoronoiPlusEDT(nz, voronoiPlusMaskOutlineStack, edt);
-        GaussianBlur3D.blur(voronoiPlusEDT, 2.5 / px, 2.5 / py, 2.5 / pz);
+        ImagePlus voronoiPlusEDT = getVoronoiPlusEDT(nz, voronoiPlusMaskOutline, edt, thresholdedEDT);
+        GaussianBlur3D.blur(voronoiPlusEDT, 1.0 / px, 1.0 / py, 1.0 / pz);
         addNoise(voronoiPlusEDT.getImageStack());
-        IJ.saveAs(voronoiPlusEDT, "TIF", "D:/debugging/SimImages/voronoiPlusMaskOutline_stack.tif");
+        IJ.saveAs(voronoiPlusEDT, "TIF", String.format("%s%sCell_Membranes.tif", outputDir, File.separator));
 //        IJ.saveAs(new ImagePlus("", thresholdedEDT), "TIF", "D:/debugging/SimImages/thresholded_edt_stack.tif");
 //        IJ.saveAs(edt.getImagePlus(), "TIF", "D:/debugging/SimImages/edt_stack.tif");
-//        IJ.saveAs(lineImage.getImagePlus(), "TIF", "D:/debugging/SimImages/voronoi_lines_stack.tif");
-//        IJ.saveAs(new ImagePlus("", pointOutput), "TIF", "D:/debugging/SimImages/centroid_stack.tif");
-        IJ.saveAs(new ImagePlus("", output), "TIF", "D:/debugging/SimImages/sim_stack.tif");
+//        IJ.saveAs(watershedDams.getImagePlus(), "TIF", "D:/debugging/SimImages/voronoi_lines_stack.tif");
+//        IJ.saveAs(pointImage.getImagePlus(), "TIF", "D:/debugging/SimImages/centroid_stack.tif");
+        IJ.saveAs(new ImagePlus("", output), "TIF", String.format("%s%sNuclei.tif", outputDir, File.separator));
     }
 
     void simulation(Nucleus[] a, int tmax, ImageStack output) {
@@ -290,18 +297,27 @@ public class Image_Simulator {
         return intImage;
     }
 
-    ImageStack getVoronoiImage(int nx, int ny, int nz, ImageHandler edt, double threshold) {
+    ImageStack getThresholdedEDT(int nx, int ny, int nz, ImageHandler edt, double threshold) {
         ImageStack thresholdedEDT = new ImageStack(nx, ny);
         for (int i = 1; i <= nz; i++) {
             ImageProcessor slice = edt.getImageStack().getProcessor(i);
             slice.setThreshold(0.0, threshold, ImageProcessor.NO_LUT_UPDATE);
             slice = slice.createMask();
-            assert (slice instanceof ByteProcessor);
-            ((ByteProcessor) slice).outline();
-            slice.invert();
             thresholdedEDT.addSlice(slice);
         }
         return thresholdedEDT;
+    }
+
+    ImageStack outlineMask(int nx, int ny, int nz, ImageStack input) {
+        ImageStack outlinedMask = new ImageStack(nx, ny);
+        for (int i = 1; i <= nz; i++) {
+            ImageProcessor slice = input.getProcessor(i).duplicate();
+            assert (slice instanceof ByteProcessor);
+            ((ByteProcessor) slice).outline();
+            slice.invert();
+            outlinedMask.addSlice(slice);
+        }
+        return outlinedMask;
     }
 
     ImageStack getVoronoiPlusMaskOutline(int nx, int ny, int nz, ImageStack thresholdedEDT, ImageHandler lineImage) {
@@ -316,14 +332,19 @@ public class Image_Simulator {
         return voronoiPlusMaskOutlineStack;
     }
 
-    ImagePlus getVoronoiPlusEDT(int nz, ImageStack voronoiPlusMaskOutlineStack, ImageHandler edt) {
+    ImagePlus getVoronoiPlusEDT(int nz, ImageStack voronoiPlusMaskOutlineStack, ImageHandler edt, ImageStack mask) {
         ImagePlus voronoiPlusEDT = (new ImageCalculator()).run("Multiply create stack", new ImagePlus("", voronoiPlusMaskOutlineStack), edt.getImagePlus());
         for (int i = 1; i <= nz; i++) {
             ImageProcessor slice = voronoiPlusEDT.getImageStack().getProcessor(i);
             slice.add(1.0);
-//            slice.multiply(100.0);
+            slice.multiply(Iback / 3.0);
+            ImageProcessor maskSlice = mask.getProcessor(i);
+            maskSlice.invert();
+            maskSlice.multiply(1.0 / 255.0);
+            maskSlice.multiply(1.1);
+            maskSlice.add(1.0);
         }
-        return voronoiPlusEDT;
+        return (new ImageCalculator()).run("Multiply create stack", voronoiPlusEDT, (new ImagePlus("", mask)));
     }
 
     void addNoise(ImageStack stack) {
