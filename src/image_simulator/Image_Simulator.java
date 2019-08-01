@@ -5,6 +5,7 @@
  */
 package image_simulator;
 
+import TimeAndDate.TimeAndDate;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.ImageStack;
@@ -27,6 +28,7 @@ import org.apache.commons.math3.distribution.GammaDistribution;
  */
 public class Image_Simulator {
 
+    private String TITLE = "Image Simulator";
     double Dx = 0.0, Dy = 0.0, Dz = 0.0; //Diffusion coefficient in x, y, and z directions
     double DT = 0.01; //time grid for SDE
 
@@ -72,6 +74,7 @@ public class Image_Simulator {
     }
 
     public void run() {
+        System.out.println(String.format("%s %s", TITLE, TimeAndDate.getCurrentTimeAndDate()));
         Nucleus[] a = new Nucleus[N];
         int tmax;
         int i;
@@ -92,13 +95,14 @@ public class Image_Simulator {
         int ny = (int) Math.round(Ly / py);
         int nz = (int) Math.round(Lz / pz);
 
-        ImageStack output = new ImageStack(nx, ny);
+        ImageStack nucleiOutput = new ImageStack(nx, ny);
         for (int n = 1; n <= nz; n++) {
-            output.addSlice(new FloatProcessor(nx, ny));
+            nucleiOutput.addSlice(new FloatProcessor(nx, ny));
         }
 
         maxframe = (int) Math.round(tmax * DT * framerate);
 
+        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Initialising nuclei..."));
         //setting the initial positions of particle
         for (i = 0; i < N; i++) {
             a[i] = new Nucleus();
@@ -115,29 +119,51 @@ public class Image_Simulator {
 
         }
 
-        simulation(a, tmax, output);
+        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Simulating nuclei movement..."));
+        simulation(a, tmax, nucleiOutput);
 
+        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Generating nuclei centroid image..."));
         ImageHandler pointImage = generatePointImage(nx, ny, nz, a);
+        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Generating EDT..."));
         ImageHandler edt = EDT.run(pointImage, 1, true, -1);
         ImageHandler edtDup = edt.duplicate();
         float edtMaxValue = (float) edtDup.getMax();
         edtDup.invert();
         edtDup.addValue(edtMaxValue + 1.0f);
+        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Running watershed..."));
         Watershed3D watershed = new Watershed3D(edtDup, pointImage, distanceThreshold, 1);
         ImageInt watershedDams = watershed.getDamImage();
+        pointImage = null;
+        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Thresholding EDT..."));
         ImageStack thresholdedEDT = getThresholdedEDT(nx, ny, nz, edtDup, distanceThreshold);
+        edtDup = null;
+        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Outlining EDT..."));
         ImageStack edtOutline = outlineMask(nx, ny, nz, thresholdedEDT);
+        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Summing outline and watershed dams..."));
         ImageStack voronoiPlusMaskOutline = getVoronoiPlusMaskOutline(nx, ny, nz, edtOutline, watershedDams);
-        addNoise(output);
-        ImagePlus voronoiPlusEDT = getVoronoiPlusEDT(nz, voronoiPlusMaskOutline, edt, thresholdedEDT);
-        GaussianBlur3D.blur(voronoiPlusEDT, 1.0 / px, 1.0 / py, 1.0 / pz);
-        addNoise(voronoiPlusEDT.getImageStack());
-        IJ.saveAs(voronoiPlusEDT, "TIF", String.format("%s%sCell_Membranes.tif", outputDir, File.separator));
+        watershedDams = null;
+        edtOutline = null;
+        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Adding noise to nuclei image..."));
+        addNoise(nucleiOutput);
+        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Saving nuclei image..."));
+        IJ.saveAs(new ImagePlus("", nucleiOutput), "TIF", String.format("%s%sNuclei.tif", outputDir, File.separator));
+        nucleiOutput = null;
+        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Summing watershed dams and EDT..."));
+        ImagePlus cellMembraneOutput = getVoronoiPlusEDT(nz, voronoiPlusMaskOutline, edt, thresholdedEDT);
+        thresholdedEDT = null;
+        edt = null;
+        voronoiPlusMaskOutline = null;
+        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Blurring membrane image..."));
+        GaussianBlur3D.blur(cellMembraneOutput, 1.0 / px, 1.0 / py, 1.0 / pz);
+        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Adding noise to membrane image..."));
+        addNoise(cellMembraneOutput.getImageStack());
+        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Saving membrane image..."));
+        IJ.saveAs(cellMembraneOutput, "TIF", String.format("%s%sCell_Membranes.tif", outputDir, File.separator));
 //        IJ.saveAs(new ImagePlus("", thresholdedEDT), "TIF", "D:/debugging/SimImages/thresholded_edt_stack.tif");
 //        IJ.saveAs(edt.getImagePlus(), "TIF", "D:/debugging/SimImages/edt_stack.tif");
 //        IJ.saveAs(watershedDams.getImagePlus(), "TIF", "D:/debugging/SimImages/voronoi_lines_stack.tif");
 //        IJ.saveAs(pointImage.getImagePlus(), "TIF", "D:/debugging/SimImages/centroid_stack.tif");
-        IJ.saveAs(new ImagePlus("", output), "TIF", String.format("%s%sNuclei.tif", outputDir, File.separator));
+        IJ.log(String.format("Done %s", TimeAndDate.getCurrentTimeAndDate()));
     }
 
     void simulation(Nucleus[] a, int tmax, ImageStack output) {
