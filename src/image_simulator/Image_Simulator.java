@@ -19,11 +19,7 @@ import ij.process.ByteProcessor;
 import ij.process.FloatProcessor;
 import ij.process.ImageProcessor;
 import java.io.File;
-import java.io.IOException;
 import java.util.Random;
-import loci.common.services.DependencyException;
-import loci.common.services.ServiceException;
-import loci.formats.FormatException;
 import mcib3d.image3d.ImageHandler;
 import mcib3d.image3d.ImageInt;
 import mcib3d.image3d.distanceMap3d.EDT;
@@ -40,9 +36,9 @@ public class Image_Simulator {
     double Dx = 0.0, Dy = 0.0, Dz = 0.0; //Diffusion coefficient in x, y, and z directions
     double DT = 0.01; //time grid for SDE
 
-    final double simSizeX = 0.962;
-    final double simSizeY = 0.962;
-    final double simSizeZ = 0.962; //pixel size in x, y, and z axis
+    final double simSizeX = 0.0962;
+    final double simSizeY = 0.0962;
+    final double simSizeZ = 0.8; //pixel size in x, y, and z axis
 
     final double outputSizeX;
     final double outputSizeY;
@@ -54,9 +50,14 @@ public class Image_Simulator {
     final double Ly = 150;
     final double Lz = 150; //domain size
 
-    double I0, sigma = 2.0, Iback = 1000, A = 10.0, B = 7.5, C = 7.5;
+    double sigma = 2.0, Iback = 100, A = 10.0, B = 7.5, C = 7.5;
+    double nucMaxIntens = 1000.0; //mean intensity in nucleus
+    double nucMinIntens = 0.0;
+    double membraneMinIntensScale = 0.0;
+    double membraneMaxIntensScale = 1.0;
     double eps = 1.0, gam = 20.0;
-    double distanceThreshold = 90.0;
+    double distanceThreshold = 75.0;
+    double blurRadius = 1.5;
     int maxframe;
 
     float PI = 3.14159265358979323846f;
@@ -65,7 +66,7 @@ public class Image_Simulator {
 
     static int count_BM = 0;
 
-    double SNR = 1.5;
+    double SNR = 2.0;
 
     int N = 10 + r.nextInt(25);
 
@@ -93,10 +94,6 @@ public class Image_Simulator {
         System.out.println(String.format("%s %s", TITLE, TimeAndDate.getCurrentTimeAndDate()));
         Nucleus[] a = new Nucleus[N];
         int tmax = (int) Math.round(1.5 / DT);
-
-        double Im = 20000; //mean intensity in nucleus
-
-        I0 = Im - Iback;
 
         //number of pixels in each direction
         int nx = (int) Math.round(Lx / simSizeX);
@@ -127,15 +124,19 @@ public class Image_Simulator {
             a[i].setX(0.4 * Lx + 0.2 * Lx * r.nextDouble());
             a[i].setY(0.4 * Ly + 0.2 * Ly * r.nextDouble());
             a[i].setZ(0.4 * Lz + 0.2 * Lz * r.nextDouble());
-
+            a[i].setxLength(A + 0.2 * A * r.nextGaussian());
+            a[i].setxLength(B + 0.2 * B * r.nextGaussian());
+            a[i].setxLength(C + 0.2 * C * r.nextGaussian());
         }
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Simulating nuclei movement..."));
         simulation(a, tmax, nucleiOutput);
+        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Downsizing nuclei image..."));
+        ImagePlus downSizedNucleiImage = downsizeStack(new ImagePlus("", nucleiOutput), nx, ny, nz);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Adding noise to nuclei image..."));
-        addNoise(nucleiOutput);
+        addNoise(downSizedNucleiImage.getImageStack());
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Saving nuclei image..."));
         try {
-            saveStack(new ImagePlus("", nucleiOutput), "Nuclei.tif", nx, ny, nz);
+            saveStack(downSizedNucleiImage, "Nuclei.tif");
         } catch (Exception e) {
             GenUtils.logError(e, "Encountered problem while saving nuclei images.");
         }
@@ -143,19 +144,34 @@ public class Image_Simulator {
 
     void saveCellMembraneStack(int nx, int ny, int nz, Nucleus[] a) {
         ImagePlus cellMembraneOutput = generateCellMembraneStack(nx, ny, nz, a);
+//        saveStack(cellMembraneOutput, "raw_cell_membrane_image.tif");
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Blurring membrane image..."));
-        GaussianBlur3D.blur(cellMembraneOutput, 1.0 / simSizeX, 1.0 / simSizeY, 1.0 / simSizeZ);
+        GaussianBlur3D.blur(cellMembraneOutput, blurRadius / simSizeX, blurRadius / simSizeY, blurRadius / simSizeZ);
+//        saveStack(cellMembraneOutput, "blurred_cell_membrane_image.tif");
+        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Downsizing membrane image..."));
+        ImagePlus downSizedCellMembraneImage = downsizeStack(cellMembraneOutput, nx, ny, nz);
+//        saveStack(downSizedCellMembraneImage, "downsized_cell_membrane_image.tif");
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Adding noise to membrane image..."));
-        addNoise(cellMembraneOutput.getImageStack());
+        addNoise(downSizedCellMembraneImage.getImageStack());
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Saving membrane image..."));
         try {
-            saveStack(cellMembraneOutput, "Cell_Membranes.tif", nx, ny, nz);
+            saveStack(downSizedCellMembraneImage, "Cell_Membranes.tif");
         } catch (Exception e) {
             GenUtils.logError(e, "Encountered problem while saving cell membrane images.");
         }
     }
 
-    void saveStack(ImagePlus input, String filename, int nx, int ny, int nz) throws DependencyException, ServiceException, FormatException, IOException {
+    void saveStack(ImagePlus input, String filename) {
+        IJ.saveAs(input, "TIF", String.format("%s%s%s", outputDir, File.separator, filename));
+//        BioFormatsImageWriter.saveStack(binnedStack,
+//                new File(String.format("%s%s%s", outputDir, File.separator, filename)),
+//                null, FormatTools.FLOAT, "XYZCT", new int[]{binnedStack.getWidth(), binnedStack.getHeight(), binnedStack.getSize(), 1, 1},
+//                new double[]{simSizeX * nx / binnedStack.getWidth(),
+//                    simSizeY * ny / binnedStack.getHeight(),
+//                    simSizeZ * nz / binnedStack.getSize()});
+    }
+
+    ImagePlus downsizeStack(ImagePlus input, int nx, int ny, int nz) {
         int size = input.getNSlices();
         int stepZ = (int) Math.round(outputSizeZ / simSizeZ);
         int xBin = (int) Math.round(outputSizeX / simSizeX);
@@ -171,13 +187,7 @@ public class Image_Simulator {
         cal.setXUnit(String.format("%cm", IJ.micronSymbol));
         cal.setYUnit(String.format("%cm", IJ.micronSymbol));
         cal.setZUnit(String.format("%cm", IJ.micronSymbol));
-        IJ.saveAs(imp, "TIF", String.format("%s%s%s", outputDir, File.separator, filename));
-//        BioFormatsImageWriter.saveStack(binnedStack,
-//                new File(String.format("%s%s%s", outputDir, File.separator, filename)),
-//                null, FormatTools.FLOAT, "XYZCT", new int[]{binnedStack.getWidth(), binnedStack.getHeight(), binnedStack.getSize(), 1, 1},
-//                new double[]{simSizeX * nx / binnedStack.getWidth(),
-//                    simSizeY * ny / binnedStack.getHeight(),
-//                    simSizeZ * nz / binnedStack.getSize()});
+        return imp;
     }
 
     ImageStack binStack(ImageStack input, int xBin, int yBin) {
@@ -195,23 +205,29 @@ public class Image_Simulator {
     ImagePlus generateCellMembraneStack(int nx, int ny, int nz, Nucleus[] a) {
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Generating nuclei centroid image..."));
         ImageHandler pointImage = generatePointImage(nx, ny, nz, a);
+//        saveStack(pointImage.getImagePlus(), "point_image.tif");
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Generating EDT..."));
         ImageHandler edt = EDT.run(pointImage, 1, true, -1);
+//        saveStack(edt.getImagePlus(), "edt_image.tif");
         ImageHandler edtDup = edt.duplicate();
         float edtMaxValue = (float) edtDup.getMax();
         edtDup.invert();
         edtDup.addValue(edtMaxValue + 1.0f);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Thresholding EDT..."));
         ImageStack thresholdedEDT = getThresholdedEDT(nx, ny, nz, edtDup, distanceThreshold);
+//        saveStack(new ImagePlus("", thresholdedEDT), "thresh_edt_image.tif");
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Outlining EDT..."));
         ImageStack edtOutline = outlineMask(nx, ny, nz, thresholdedEDT);
+//        saveStack(new ImagePlus("", edtOutline), "outlined_edt_image.tif");
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Running watershed..."));
         Watershed3D watershed = new Watershed3D(edtDup, pointImage, distanceThreshold, 1);
         ImageInt watershedDams = watershed.getDamImage();
+//        saveStack(watershedDams.getImagePlus(), "watershed_dam_image.tif");
         edtDup = null;
         pointImage = null;
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Summing outline and watershed dams..."));
         ImageStack voronoiPlusMaskOutline = getVoronoiPlusMaskOutline(nx, ny, nz, edtOutline, watershedDams);
+//        saveStack(new ImagePlus("", voronoiPlusMaskOutline), "dams_plus_outline_image.tif");
         watershedDams = null;
         edtOutline = null;
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Summing watershed dams and EDT..."));
@@ -232,7 +248,7 @@ public class Image_Simulator {
         Dyc = Dy;
         Dzc = Dz;
 
-        imax = (int) Math.round(100.0 / DT);
+        imax = (int) Math.round(500.0 / DT);
         Dx = 0.0;
         Dy = 0.0;
         Dz = 0.0;
@@ -412,17 +428,21 @@ public class Image_Simulator {
 
     ImagePlus getVoronoiPlusEDT(int nz, ImageStack voronoiPlusMaskOutlineStack, ImageHandler edt, ImageStack mask) {
         ImagePlus voronoiPlusEDT = (new ImageCalculator()).run("Multiply create stack", new ImagePlus("", voronoiPlusMaskOutlineStack), edt.getImagePlus());
+        ImageStack scaledMask = new ImageStack(mask.getWidth(), mask.getHeight());
         for (int i = 1; i <= nz; i++) {
+            double intensScale = membraneMaxIntensScale - (membraneMaxIntensScale - membraneMinIntensScale) * (i - 1) / nz;
+//            System.out.println(String.format("z: %d IntensScale: %f",i, intensScale));
             ImageProcessor slice = voronoiPlusEDT.getImageStack().getProcessor(i);
             slice.add(1.0);
-            slice.multiply(Iback / 3.0);
+            slice.multiply(Iback);
             ImageProcessor maskSlice = mask.getProcessor(i);
             maskSlice.invert();
-            maskSlice.multiply(1.0 / 255.0);
-            maskSlice.multiply(1.1);
-            maskSlice.add(1.0);
+            ImageProcessor floatMaskSlice = maskSlice.convertToFloatProcessor();
+            floatMaskSlice.multiply(intensScale / 255.0);
+            floatMaskSlice.add(1.0);
+            scaledMask.addSlice(floatMaskSlice);
         }
-        return (new ImageCalculator()).run("Multiply create stack", voronoiPlusEDT, (new ImagePlus("", mask)));
+        return (new ImageCalculator()).run("Multiply create stack", voronoiPlusEDT, (new ImagePlus("", scaledMask)));
     }
 
     void addNoise(ImageStack stack) {
@@ -457,6 +477,7 @@ public class Image_Simulator {
 
         public void run() {
             for (int k = thread; k < output.getSize(); k += nThreads) {
+                double varIntens = nucMaxIntens - (nucMaxIntens - nucMinIntens) * k / output.size();
                 for (int j = 0; j < output.getHeight(); j++) {
                     for (int i = 0; i < output.getWidth(); i++) {
                         double xi = simSizeX * (2.0 * i + 1) / 2.0;
@@ -486,7 +507,7 @@ public class Image_Simulator {
 
                             double temp = 1 - (xr * xr / (A * A) + yr * yr / (B * B) + zr * zr / (C * C));
                             temp = (Math.tanh(sigma * temp) + 1.0) / 2.0;
-                            temp = (I0 / Math.abs((Math.tanh(sigma) + 1.0) / 2.0)) * temp;
+                            temp = (varIntens / Math.abs((Math.tanh(sigma) + 1.0) / 2.0)) * temp;
 
                             if (temp > intmax) {
                                 intmax = temp;
@@ -515,7 +536,7 @@ public class Image_Simulator {
         public void run() {
             int width = stack.getWidth();
             int height = stack.getHeight();
-            double snr2 = SNR * SNR;
+            double snr2 = Math.pow(SNR, 2.0);
             for (int z = thread + 1; z <= stack.getSize(); z += nThreads) {
                 ImageProcessor slice = stack.getProcessor(z);
                 for (int y = 0; y < height; y++) {

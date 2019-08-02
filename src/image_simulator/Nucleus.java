@@ -20,6 +20,10 @@ public class Nucleus {
     private double theta_y;
     private double theta_z;
 
+    private double xLength;
+    private double yLength;
+    private double zLength;
+    
     public double getX() {
         return x;
     }
@@ -66,6 +70,30 @@ public class Nucleus {
 
     public void setTheta_z(double theta_z) {
         this.theta_z = theta_z;
+    }
+
+    public double getxLength() {
+        return xLength;
+    }
+
+    public void setxLength(double xLength) {
+        this.xLength = xLength;
+    }
+
+    public double getyLength() {
+        return yLength;
+    }
+
+    public void setyLength(double yLength) {
+        this.yLength = yLength;
+    }
+
+    public double getzLength() {
+        return zLength;
+    }
+
+    public void setzLength(double zLength) {
+        this.zLength = zLength;
     }
 
 }
