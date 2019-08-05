@@ -14,7 +14,9 @@ import ij.ImageStack;
 import ij.measure.Calibration;
 import ij.measure.ResultsTable;
 import ij.plugin.Binner;
+import ij.plugin.Concatenator;
 import ij.plugin.GaussianBlur3D;
+import ij.plugin.HyperStackConverter;
 import ij.plugin.ImageCalculator;
 import ij.plugin.SubstackMaker;
 import ij.plugin.filter.Analyzer;
@@ -187,7 +189,13 @@ public class Image_Simulator {
         addNoise(downSizedCellMembraneImage.getImageStack());
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Saving membrane image..."));
         try {
-            saveStack(downSizedCellMembraneImage, "Cell_Membranes.tif");
+            String nucFileName = String.format("%s%s%s", outputDir, File.separator, "Nuclei.tif");
+            ImagePlus nuclei = IJ.openImage(nucFileName);
+            ImagePlus concat = (new Concatenator()).concatenate(new ImagePlus[]{nuclei, downSizedCellMembraneImage}, false);
+            saveStack(HyperStackConverter.toHyperStack(concat, 2, concat.getNSlices(), 1, "xyzct", "composite"), "Sim_Image.tif");
+            nuclei.changes = false;
+            nuclei.close();
+            (new File(String.format("%s%s%s", outputDir, File.separator, "Nuclei.tif"))).delete();
         } catch (Exception e) {
             GenUtils.logError(e, "Encountered problem while saving cell membrane images.");
         }
