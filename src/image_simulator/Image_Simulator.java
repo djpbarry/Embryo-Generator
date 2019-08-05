@@ -5,20 +5,25 @@
  */
 package image_simulator;
 
+import IO.DataWriter;
 import TimeAndDate.TimeAndDate;
 import UtilClasses.GenUtils;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.ImageStack;
 import ij.measure.Calibration;
+import ij.measure.ResultsTable;
 import ij.plugin.Binner;
 import ij.plugin.GaussianBlur3D;
 import ij.plugin.ImageCalculator;
 import ij.plugin.SubstackMaker;
+import ij.plugin.filter.Analyzer;
 import ij.process.ByteProcessor;
 import ij.process.FloatProcessor;
 import ij.process.ImageProcessor;
+import ij.process.StackStatistics;
 import java.io.File;
+import java.io.IOException;
 import java.util.Random;
 import mcib3d.image3d.ImageHandler;
 import mcib3d.image3d.ImageInt;
@@ -38,7 +43,7 @@ public class Image_Simulator {
 
     final double simSizeX = 0.0962;
     final double simSizeY = 0.0962;
-    final double simSizeZ = 0.8; //pixel size in x, y, and z axis
+    final double simSizeZ = 0.0962; //pixel size in x, y, and z axis
 
     final double outputSizeX;
     final double outputSizeY;
@@ -60,17 +65,25 @@ public class Image_Simulator {
     double blurRadius = 1.5;
     int maxframe;
 
-    float PI = 3.14159265358979323846f;
+    private final int stepZ;
+    private final int xBin;
+    private final int yBin;
+
+    private final double PI = Math.PI;
 
     private Random r = new Random();
 
     static int count_BM = 0;
 
-    double SNR = 2.0;
+    private final double snr;
 
     int N = 10 + r.nextInt(25);
 
     private final String outputDir;
+
+    private final String stackDir;
+
+    private final ResultsTable resultsTable = Analyzer.getResultsTable();
 
     /**
      * @param args the command line arguments
@@ -79,19 +92,28 @@ public class Image_Simulator {
         double px = Double.parseDouble(args[0]);
         double py = Double.parseDouble(args[1]);
         double pz = Double.parseDouble(args[2]);
-        (new Image_Simulator(new double[]{px, py, pz}, args[3])).run();
+        (new Image_Simulator(new double[]{px, py, pz}, args[3], Double.parseDouble(args[4]))).run();
         System.exit(0);
     }
 
-    public Image_Simulator(double[] outputVoxSize, String outputDir) {
+    public Image_Simulator(double[] outputVoxSize, String outputDir, double snr) {
         this.outputSizeX = outputVoxSize[0];
         this.outputSizeY = outputVoxSize[1];
         this.outputSizeZ = outputVoxSize[2];
-        this.outputDir = outputDir;
+        this.snr = snr;
+        this.outputDir = GenUtils.openResultsDirectory(String.format("%s%s%s", outputDir, File.separator, TITLE));
+        this.stackDir = GenUtils.openResultsDirectory(String.format("%s%s%s", this.outputDir, File.separator, "cell_ground_truth"));
+        this.stepZ = (int) Math.round(outputSizeZ / simSizeZ);
+        this.xBin = (int) Math.round(outputSizeX / simSizeX);
+        this.yBin = (int) Math.round(outputSizeY / simSizeY);
     }
 
     public void run() {
         System.out.println(String.format("%s %s", TITLE, TimeAndDate.getCurrentTimeAndDate()));
+        System.out.println(String.format("Output_Size_X = %f", outputSizeX));
+        System.out.println(String.format("Output_Size_Y = %f", outputSizeY));
+        System.out.println(String.format("Output_Size_Z = %f", outputSizeZ));
+        System.out.println(String.format("SNR = %f", snr));
         Nucleus[] a = new Nucleus[N];
         int tmax = (int) Math.round(1.5 / DT);
 
@@ -103,6 +125,16 @@ public class Image_Simulator {
         saveNucleiStack(nx, ny, nz, a, tmax);
 
         saveCellMembraneStack(nx, ny, nz, a);
+
+        for (int i = 0; i < a.length; i++) {
+            resultsTable.setValue("Nucleus_Centroid_X", i, a[i].getX());
+            resultsTable.setValue("Nucleus_Centroid_Y", i, a[i].getY());
+        }
+        try {
+            DataWriter.saveResultsTable(resultsTable, new File(String.format("%s%s%s", outputDir, File.separator, "Ground_Truth_Data.csv")));
+        } catch (IOException e) {
+            GenUtils.logError(e, "Error saving ground truth data.");
+        }
 
         IJ.log(String.format("Done %s", TimeAndDate.getCurrentTimeAndDate()));
     }
@@ -172,13 +204,9 @@ public class Image_Simulator {
     }
 
     ImagePlus downsizeStack(ImagePlus input, int nx, int ny, int nz) {
-        int size = input.getNSlices();
-        int stepZ = (int) Math.round(outputSizeZ / simSizeZ);
-        int xBin = (int) Math.round(outputSizeX / simSizeX);
-        int yBin = (int) Math.round(outputSizeY / simSizeY);
-        ImagePlus subStack = (new SubstackMaker()).makeSubstack(input, String.format("1-%d-%d", size, stepZ));
+        ImagePlus subStack = downSizeStack(input);
         input = null;
-        ImageStack binnedStack = binStack(subStack.getImageStack(), xBin, yBin);
+        ImageStack binnedStack = binStack(subStack.getImageStack(), xBin, yBin, Binner.SUM);
         ImagePlus imp = new ImagePlus("", binnedStack);
         Calibration cal = imp.getCalibration();
         cal.pixelWidth = simSizeX * nx / binnedStack.getWidth();
@@ -190,14 +218,19 @@ public class Image_Simulator {
         return imp;
     }
 
-    ImageStack binStack(ImageStack input, int xBin, int yBin) {
+    ImagePlus downSizeStack(ImagePlus input) {
+        int size = input.getNSlices();
+        return (new SubstackMaker()).makeSubstack(input, String.format("1-%d-%d", size, stepZ));
+    }
+
+    ImageStack binStack(ImageStack input, int xBin, int yBin, int binningMethod) {
         int outWidth = (int) Math.round(input.getWidth() / xBin);
         int outHeight = (int) Math.round(input.getHeight() / yBin);
         ImageStack binnedStack = new ImageStack(outWidth, outHeight);
         Binner b = new Binner();
         for (int s = 1; s <= input.getSize(); s++) {
             ImageProcessor slice = input.getProcessor(s);
-            binnedStack.addSlice(b.shrink(slice, xBin, yBin, Binner.SUM));
+            binnedStack.addSlice(b.shrink(slice, xBin, yBin, binningMethod));
         }
         return binnedStack;
     }
@@ -222,7 +255,7 @@ public class Image_Simulator {
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Running watershed..."));
         Watershed3D watershed = new Watershed3D(edtDup, pointImage, distanceThreshold, 1);
         ImageInt watershedDams = watershed.getDamImage();
-//        saveStack(watershedDams.getImagePlus(), "watershed_dam_image.tif");
+        saveGroundTruth(a, nx, ny, nz, watershed.getWatershedImage3D().getImagePlus());
         edtDup = null;
         pointImage = null;
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Summing outline and watershed dams..."));
@@ -232,6 +265,27 @@ public class Image_Simulator {
         edtOutline = null;
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Summing watershed dams and EDT..."));
         return getVoronoiPlusEDT(nz, voronoiPlusMaskOutline, edt, thresholdedEDT);
+    }
+
+    void saveGroundTruth(Nucleus[] a, int nx, int ny, int nz, ImagePlus groundTruth) {
+        ImagePlus subStack = downSizeStack(groundTruth);
+        ImageStack binnedStack = binStack(subStack.getImageStack(), xBin, yBin, Binner.MIN);
+        ImagePlus binnedImp = new ImagePlus("", binnedStack);
+        StackStatistics stats = new StackStatistics(binnedImp);
+        int[] hist = stats.histogram16;
+        for (int i = 1; i <= a.length; i++) {
+            double vol = hist[i]
+                    * (simSizeX * nx / binnedStack.getWidth())
+                    * (simSizeY * ny / binnedStack.getHeight())
+                    * (simSizeZ * nz / binnedStack.getSize());
+            int row = resultsTable.getCounter();
+            resultsTable.setValue("Cell_Index", row, i);
+            resultsTable.setValue("Cell_Volume_Microns_Cubed", row, vol);
+        }
+        for (int s = 1; s <= binnedImp.getNSlices(); s++) {
+            ImagePlus imp2 = new ImagePlus("", binnedStack.getProcessor(s));
+            IJ.saveAs(imp2, "PNG", String.format("%s%scell_ground_truth_z%d", stackDir, File.separator, s));
+        }
     }
 
     void simulation(Nucleus[] a, int tmax, ImageStack output) {
@@ -536,7 +590,7 @@ public class Image_Simulator {
         public void run() {
             int width = stack.getWidth();
             int height = stack.getHeight();
-            double snr2 = Math.pow(SNR, 2.0);
+            double snr2 = Math.pow(snr, 2.0);
             for (int z = thread + 1; z <= stack.getSize(); z += nThreads) {
                 ImageProcessor slice = stack.getProcessor(z);
                 for (int y = 0; y < height; y++) {
