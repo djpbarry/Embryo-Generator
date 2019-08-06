@@ -18,6 +18,7 @@ import ij.plugin.Concatenator;
 import ij.plugin.GaussianBlur3D;
 import ij.plugin.HyperStackConverter;
 import ij.plugin.ImageCalculator;
+import ij.plugin.PNG_Writer;
 import ij.plugin.SubstackMaker;
 import ij.plugin.filter.Analyzer;
 import ij.process.ByteProcessor;
@@ -43,9 +44,9 @@ public class Image_Simulator {
     double Dx = 0.0, Dy = 0.0, Dz = 0.0; //Diffusion coefficient in x, y, and z directions
     double DT = 0.01; //time grid for SDE
 
-    final double simSizeX = 0.0962;
-    final double simSizeY = 0.0962;
-    final double simSizeZ = 0.0962; //pixel size in x, y, and z axis
+    final double simSizeX;
+    final double simSizeY;
+    final double simSizeZ; //pixel size in x, y, and z axis
 
     final double outputSizeX;
     final double outputSizeY;
@@ -94,14 +95,21 @@ public class Image_Simulator {
         double px = Double.parseDouble(args[0]);
         double py = Double.parseDouble(args[1]);
         double pz = Double.parseDouble(args[2]);
-        (new Image_Simulator(new double[]{px, py, pz}, args[3], Double.parseDouble(args[4]))).run();
+        double sx = Double.parseDouble(args[3]);
+        double sy = Double.parseDouble(args[4]);
+        double sz = Double.parseDouble(args[5]);
+        System.setProperty("java.awt.headless", "true");
+        (new Image_Simulator(new double[]{px, py, pz}, new double[]{sx, sy, sz}, args[7], Double.parseDouble(args[6]))).run();
         System.exit(0);
     }
 
-    public Image_Simulator(double[] outputVoxSize, String outputDir, double snr) {
+    public Image_Simulator(double[] outputVoxSize, double[] simVoxSize, String outputDir, double snr) {
         this.outputSizeX = outputVoxSize[0];
         this.outputSizeY = outputVoxSize[1];
         this.outputSizeZ = outputVoxSize[2];
+        this.simSizeX = simVoxSize[0];
+        this.simSizeY = simVoxSize[1];
+        this.simSizeZ = simVoxSize[2];
         this.snr = snr;
         this.outputDir = GenUtils.openResultsDirectory(String.format("%s%s%s", outputDir, File.separator, TITLE));
         this.stackDir = GenUtils.openResultsDirectory(String.format("%s%s%s", this.outputDir, File.separator, "cell_ground_truth"));
@@ -112,6 +120,9 @@ public class Image_Simulator {
 
     public void run() {
         System.out.println(String.format("%s %s", TITLE, TimeAndDate.getCurrentTimeAndDate()));
+        System.out.println(String.format("Simulation_Size_X = %f", simSizeX));
+        System.out.println(String.format("Simulation_Size_Y = %f", simSizeY));
+        System.out.println(String.format("Simulation_Size_Z = %f", simSizeZ));
         System.out.println(String.format("Output_Size_X = %f", outputSizeX));
         System.out.println(String.format("Output_Size_Y = %f", outputSizeY));
         System.out.println(String.format("Output_Size_Z = %f", outputSizeZ));
@@ -290,15 +301,19 @@ public class Image_Simulator {
             resultsTable.setValue("Cell_Index", row, i);
             resultsTable.setValue("Cell_Volume_Microns_Cubed", row, vol);
         }
-        for (int s = 1; s <= binnedImp.getNSlices(); s++) {
-            ImagePlus imp2 = new ImagePlus("", binnedStack.getProcessor(s));
-            IJ.saveAs(imp2, "PNG", String.format("%s%scell_ground_truth_z%d", stackDir, File.separator, s));
+        try {
+            PNG_Writer pngW = new PNG_Writer();
+            for (int s = 1; s <= binnedImp.getNSlices(); s++) {
+                ImagePlus imp2 = new ImagePlus("", binnedStack.getProcessor(s));
+                pngW.writeImage(imp2, String.format("%s%scell_ground_truth_z%d.png", stackDir, File.separator, s), 0);
+            }
+        } catch (Exception e) {
+            GenUtils.logError(e, "Error saving ground truth images.");
         }
     }
 
     void simulation(Nucleus[] a, int tmax, ImageStack output) {
         initial_relaxation(a);
-
         Tanh_blob(a, output);
     }
 
