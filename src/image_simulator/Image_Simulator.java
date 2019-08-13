@@ -142,6 +142,7 @@ public class Image_Simulator {
         for (int i = 0; i < a.length; i++) {
             resultsTable.setValue("Nucleus_Centroid_X", i, a[i].getX());
             resultsTable.setValue("Nucleus_Centroid_Y", i, a[i].getY());
+            resultsTable.setValue("Nucleus_Centroid_Z", i, a[i].getZ());
         }
         try {
             DataWriter.saveResultsTable(resultsTable, new File(String.format("%s%s%s", outputDir, File.separator, "Ground_Truth_Data.csv")));
