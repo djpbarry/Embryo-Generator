@@ -137,13 +137,14 @@ public class Image_Simulator {
 
         saveNucleiStack(nx, ny, nz, a, tmax);
 
-        saveCellMembraneStack(nx, ny, nz, a);
-
         for (int i = 0; i < a.length; i++) {
             resultsTable.setValue("Nucleus_Centroid_X", i, a[i].getX());
             resultsTable.setValue("Nucleus_Centroid_Y", i, a[i].getY());
             resultsTable.setValue("Nucleus_Centroid_Z", i, a[i].getZ());
         }
+
+        saveCellMembraneStack(nx, ny, nz, a);
+
         try {
             DataWriter.saveResultsTable(resultsTable, new File(String.format("%s%s%s", outputDir, File.separator, "Ground_Truth_Data.csv")));
         } catch (IOException e) {
@@ -293,14 +294,17 @@ public class Image_Simulator {
         ImagePlus binnedImp = new ImagePlus("", binnedStack);
         StackStatistics stats = new StackStatistics(binnedImp);
         int[] hist = stats.histogram16;
-        for (int i = 1; i <= a.length; i++) {
-            double vol = hist[i]
-                    * (simSizeX * nx / binnedStack.getWidth())
-                    * (simSizeY * ny / binnedStack.getHeight())
-                    * (simSizeZ * nz / binnedStack.getSize());
-            int row = resultsTable.getCounter();
-            resultsTable.setValue("Cell_Index", row, i);
-            resultsTable.setValue("Cell_Volume_Microns_Cubed", row, vol);
+        double binnedXRes = simSizeX * nx / binnedStack.getWidth();
+        double binnedYRes = simSizeY * ny / binnedStack.getHeight();
+        double binnedZRes = simSizeZ * nz / binnedStack.getSize();
+        for (int i = 0; i < a.length; i++) {
+            int x = (int) Math.round(a[i].getX() / binnedXRes);
+            int y = (int) Math.round(a[i].getY() / binnedYRes);
+            int z = (int) Math.round(a[i].getZ() / binnedZRes);
+            int index = (int) Math.round(binnedStack.getVoxel(x, y, z));
+            double vol = hist[index] * binnedXRes * binnedYRes * binnedZRes;
+            resultsTable.setValue("Cell_Index", index - 1, i);
+            resultsTable.setValue("Cell_Volume_Microns_Cubed", index - 1, vol);
         }
         try {
             PNG_Writer pngW = new PNG_Writer();
