@@ -293,6 +293,15 @@ public class Image_Simulator {
         ImageStack binnedStack = binStack(subStack.getImageStack(), xBin, yBin, Binner.MIN);
         ImagePlus binnedImp = new ImagePlus("", binnedStack);
         StackStatistics stats = new StackStatistics(binnedImp);
+        try {
+            PNG_Writer pngW = new PNG_Writer();
+            for (int s = 1; s <= binnedImp.getNSlices(); s++) {
+                ImagePlus imp2 = new ImagePlus("", binnedStack.getProcessor(s));
+                pngW.writeImage(imp2, String.format("%s%scell_ground_truth_z%d.png", stackDir, File.separator, s), 0);
+            }
+        } catch (Exception e) {
+            GenUtils.logError(e, "Error saving ground truth images.");
+        }
         int[] hist = stats.histogram16;
         double binnedXRes = simSizeX * nx / binnedStack.getWidth();
         double binnedYRes = simSizeY * ny / binnedStack.getHeight();
@@ -303,17 +312,8 @@ public class Image_Simulator {
             int z = (int) Math.round(a[i].getZ() / binnedZRes);
             int index = (int) Math.round(binnedStack.getVoxel(x, y, z));
             double vol = hist[index] * binnedXRes * binnedYRes * binnedZRes;
-            resultsTable.setValue("Cell_Index", index - 1, i);
-            resultsTable.setValue("Cell_Volume_Microns_Cubed", index - 1, vol);
-        }
-        try {
-            PNG_Writer pngW = new PNG_Writer();
-            for (int s = 1; s <= binnedImp.getNSlices(); s++) {
-                ImagePlus imp2 = new ImagePlus("", binnedStack.getProcessor(s));
-                pngW.writeImage(imp2, String.format("%s%scell_ground_truth_z%d.png", stackDir, File.separator, s), 0);
-            }
-        } catch (Exception e) {
-            GenUtils.logError(e, "Error saving ground truth images.");
+            resultsTable.setValue("Cell_Index", i, index - 1);
+            resultsTable.setValue("Cell_Volume_Microns_Cubed", i, vol);
         }
     }
 
