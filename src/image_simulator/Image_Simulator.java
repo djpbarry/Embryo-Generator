@@ -83,9 +83,9 @@ public class Image_Simulator {
 //    int N = 10 + r.nextInt(25);
     private int nCells;
 
-    private final String outputDir;
+    private final String simOutputDir;
 
-    private final String stackDir;
+    private final String groundTruthDir;
 
     private final ResultsTable resultsTable = Analyzer.getResultsTable();
 
@@ -100,11 +100,11 @@ public class Image_Simulator {
         double sy = Double.parseDouble(args[4]);
         double sz = Double.parseDouble(args[5]);
         System.setProperty("java.awt.headless", "true");
-        (new Image_Simulator(new double[]{px, py, pz}, new double[]{sx, sy, sz}, args[8], Double.parseDouble(args[6]), Integer.parseInt(args[7]))).run();
+        (new Image_Simulator(new double[]{px, py, pz}, new double[]{sx, sy, sz}, Double.parseDouble(args[6]), Integer.parseInt(args[7]), args[8], args[9])).run();
         System.exit(0);
     }
 
-    public Image_Simulator(double[] outputVoxSize, double[] simVoxSize, String outputDir, double snr, int nCells) {
+    public Image_Simulator(double[] outputVoxSize, double[] simVoxSize, double snr, int nCells, String simOutputDir, String groundTruthOutputDir) {
         this.outputSizeX = outputVoxSize[0];
         this.outputSizeY = outputVoxSize[1];
         this.outputSizeZ = outputVoxSize[2];
@@ -113,8 +113,8 @@ public class Image_Simulator {
         this.simSizeZ = simVoxSize[2];
         this.snr = snr;
         this.nCells = nCells;
-        this.outputDir = GenUtils.openResultsDirectory(String.format("%s%s%s", outputDir, File.separator, TITLE));
-        this.stackDir = GenUtils.openResultsDirectory(String.format("%s%s%s", this.outputDir, File.separator, "cell_ground_truth"));
+        this.simOutputDir = GenUtils.openResultsDirectory(String.format("%s%s%s_snr%f_ncells%d", simOutputDir, File.separator, TITLE, this.snr, this.nCells));
+        this.groundTruthDir = GenUtils.openResultsDirectory(String.format("%s%s%s_snr%f_ncells%d", groundTruthOutputDir, File.separator, TITLE, this.snr, this.nCells));
         this.stepZ = (int) Math.round(outputSizeZ / simSizeZ);
         this.xBin = (int) Math.round(outputSizeX / simSizeX);
         this.yBin = (int) Math.round(outputSizeY / simSizeY);
@@ -148,7 +148,7 @@ public class Image_Simulator {
         saveCellMembraneStack(nx, ny, nz, a);
 
         try {
-            DataWriter.saveResultsTable(resultsTable, new File(String.format("%s%s%s", outputDir, File.separator, "Ground_Truth_Data.csv")));
+            DataWriter.saveResultsTable(resultsTable, new File(String.format("%s%s%s_snr%f_ncells%d.csv", groundTruthDir, File.separator, "Ground_Truth_Data", snr, nCells)));
         } catch (IOException e) {
             GenUtils.logError(e, "Error saving ground truth data.");
         }
@@ -204,20 +204,20 @@ public class Image_Simulator {
         addNoise(downSizedCellMembraneImage.getImageStack());
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Saving membrane image..."));
         try {
-            String nucFileName = String.format("%s%s%s", outputDir, File.separator, "Nuclei.tif");
+            String nucFileName = String.format("%s%s%s", simOutputDir, File.separator, "Nuclei.tif");
             ImagePlus nuclei = IJ.openImage(nucFileName);
             ImagePlus concat = (new Concatenator()).concatenate(new ImagePlus[]{nuclei, downSizedCellMembraneImage}, false);
-            saveStack(HyperStackConverter.toHyperStack(concat, 2, concat.getNSlices(), 1, "xyzct", "composite"), "Sim_Image.tif");
+            saveStack(HyperStackConverter.toHyperStack(concat, 2, concat.getNSlices(), 1, "xyzct", "composite"), String.format("Sim_Image_snr%f_ncells%d.tif", snr, nCells));
             nuclei.changes = false;
             nuclei.close();
-            (new File(String.format("%s%s%s", outputDir, File.separator, "Nuclei.tif"))).delete();
+            (new File(String.format("%s%s%s", simOutputDir, File.separator, "Nuclei.tif"))).delete();
         } catch (Exception e) {
             GenUtils.logError(e, "Encountered problem while saving cell membrane images.");
         }
     }
 
     void saveStack(ImagePlus input, String filename) {
-        IJ.saveAs(input, "TIF", String.format("%s%s%s", outputDir, File.separator, filename));
+        IJ.saveAs(input, "TIF", String.format("%s%s%s", simOutputDir, File.separator, filename));
 //        BioFormatsImageWriter.saveStack(binnedStack,
 //                new File(String.format("%s%s%s", outputDir, File.separator, filename)),
 //                null, FormatTools.FLOAT, "XYZCT", new int[]{binnedStack.getWidth(), binnedStack.getHeight(), binnedStack.getSize(), 1, 1},
@@ -299,7 +299,7 @@ public class Image_Simulator {
             PNG_Writer pngW = new PNG_Writer();
             for (int s = 1; s <= binnedImp.getNSlices(); s++) {
                 ImagePlus imp2 = new ImagePlus("", binnedStack.getProcessor(s));
-                pngW.writeImage(imp2, String.format("%s%scell_ground_truth_z%d.png", stackDir, File.separator, s), 0);
+                pngW.writeImage(imp2, String.format("%s%scell_ground_truth_z%d.png", groundTruthDir, File.separator, s), 0);
             }
         } catch (Exception e) {
             GenUtils.logError(e, "Error saving ground truth images.");
