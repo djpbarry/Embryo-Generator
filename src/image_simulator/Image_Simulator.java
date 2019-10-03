@@ -80,7 +80,8 @@ public class Image_Simulator {
 
     private final double snr;
 
-    int N = 10 + r.nextInt(25);
+//    int N = 10 + r.nextInt(25);
+    private int nCells;
 
     private final String outputDir;
 
@@ -99,11 +100,11 @@ public class Image_Simulator {
         double sy = Double.parseDouble(args[4]);
         double sz = Double.parseDouble(args[5]);
         System.setProperty("java.awt.headless", "true");
-        (new Image_Simulator(new double[]{px, py, pz}, new double[]{sx, sy, sz}, args[7], Double.parseDouble(args[6]))).run();
+        (new Image_Simulator(new double[]{px, py, pz}, new double[]{sx, sy, sz}, args[8], Double.parseDouble(args[6]), Integer.parseInt(args[7]))).run();
         System.exit(0);
     }
 
-    public Image_Simulator(double[] outputVoxSize, double[] simVoxSize, String outputDir, double snr) {
+    public Image_Simulator(double[] outputVoxSize, double[] simVoxSize, String outputDir, double snr, int nCells) {
         this.outputSizeX = outputVoxSize[0];
         this.outputSizeY = outputVoxSize[1];
         this.outputSizeZ = outputVoxSize[2];
@@ -111,6 +112,7 @@ public class Image_Simulator {
         this.simSizeY = simVoxSize[1];
         this.simSizeZ = simVoxSize[2];
         this.snr = snr;
+        this.nCells = nCells;
         this.outputDir = GenUtils.openResultsDirectory(String.format("%s%s%s", outputDir, File.separator, TITLE));
         this.stackDir = GenUtils.openResultsDirectory(String.format("%s%s%s", this.outputDir, File.separator, "cell_ground_truth"));
         this.stepZ = (int) Math.round(outputSizeZ / simSizeZ);
@@ -127,7 +129,7 @@ public class Image_Simulator {
         System.out.println(String.format("Output_Size_Y = %f", outputSizeY));
         System.out.println(String.format("Output_Size_Z = %f", outputSizeZ));
         System.out.println(String.format("SNR = %f", snr));
-        Nucleus[] a = new Nucleus[N];
+        Nucleus[] a = new Nucleus[nCells];
         int tmax = (int) Math.round(1.5 / DT);
 
         //number of pixels in each direction
@@ -163,7 +165,7 @@ public class Image_Simulator {
 
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Initialising nuclei..."));
         //setting the initial positions of particle
-        for (int i = 0; i < N; i++) {
+        for (int i = 0; i < nCells; i++) {
             a[i] = new Nucleus();
             a[i].setTheta_x(0.25 * PI * r.nextFloat());
             a[i].setTheta_y(0.25 * PI * r.nextFloat());
@@ -352,17 +354,17 @@ public class Image_Simulator {
         double xij, yij, zij, rij, Fijx, Fijy, Fijz;
         int i, j;
 
-        for (i = 0; i < N; i++) {
+        for (i = 0; i < nCells; i++) {
             temp[i] = a[i];
         }
 
-        for (i = 0; i < N; i++) {
+        for (i = 0; i < nCells; i++) {
 
             Fijx = 0.0;
             Fijy = 0.0;
             Fijz = 0.0;
 
-            for (j = 0; j < N; j++) {
+            for (j = 0; j < nCells; j++) {
                 if (j != i) {
                     xij = a[j].getX() - a[i].getX();
                     yij = a[j].getY() - a[i].getY();
@@ -408,7 +410,7 @@ public class Image_Simulator {
 
         }
 
-        for (i = 0; i < N; i++) {
+        for (i = 0; i < nCells; i++) {
             a[i] = temp[i];
         }
     }
@@ -462,7 +464,7 @@ public class Image_Simulator {
             slice.fill();
             pointOutput.addSlice(slice);
         }
-        for (int i = 0; i < N; i++) {
+        for (int i = 0; i < nCells; i++) {
             int x = (int) Math.round(a[i].getX() / simSizeX);
             int y = (int) Math.round(a[i].getY() / simSizeY);
             int z = (int) Math.round(a[i].getZ() / simSizeZ);
@@ -567,7 +569,7 @@ public class Image_Simulator {
                         double zi = simSizeZ * (2.0 * k + 1) / 2.0;
                         double intensity = Iback;
                         double intmax = 0.0;
-                        for (int l = 0; l < N; l++) {
+                        for (int l = 0; l < nCells; l++) {
                             double xd = (xi - a[l].getX());
                             double yd = (yi - a[l].getY());
                             double zd = (zi - a[l].getZ());
