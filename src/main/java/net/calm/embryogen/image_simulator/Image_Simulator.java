@@ -10,33 +10,27 @@ import ij.ImagePlus;
 import ij.ImageStack;
 import ij.measure.Calibration;
 import ij.measure.ResultsTable;
-import ij.plugin.Binner;
-import ij.plugin.Concatenator;
-import ij.plugin.GaussianBlur3D;
-import ij.plugin.HyperStackConverter;
-import ij.plugin.ImageCalculator;
-import ij.plugin.PNG_Writer;
-import ij.plugin.SubstackMaker;
+import ij.plugin.*;
 import ij.plugin.filter.Analyzer;
 import ij.process.ByteProcessor;
 import ij.process.FloatProcessor;
 import ij.process.ImageProcessor;
 import ij.process.StackStatistics;
-import java.io.File;
-import java.io.IOException;
-import java.util.Random;
+import image_simulator.Nucleus;
 import mcib3d.image3d.ImageHandler;
 import mcib3d.image3d.ImageInt;
 import mcib3d.image3d.distanceMap3d.EDT;
 import mcib3d.image3d.regionGrowing.Watershed3D;
+import net.calm.embryogen.noise.NoiseThread;
 import net.calm.iaclasslibrary.IO.DataWriter;
 import net.calm.iaclasslibrary.TimeAndDate.TimeAndDate;
 import net.calm.iaclasslibrary.UtilClasses.GenUtils;
-import org.apache.commons.math3.distribution.GammaDistribution;
-import image_simulator.Nucleus;
+
+import java.io.File;
+import java.io.IOException;
+import java.util.Random;
 
 /**
- *
  * @author David Barry <david.barry at crick dot ac dot uk>
  */
 public class Image_Simulator {
@@ -57,7 +51,7 @@ public class Image_Simulator {
 
     final double Lx = 150;
     final double Ly = 150;
-    final double Lz = 150; //domain size
+    final double Lz = 0.5; //domain size
 
     double sigma = 2.0, Iback = 100, A = 10.0, B = 7.5, C = 7.5;
     double nucMaxIntens = 1000.0; //mean intensity in nucleus
@@ -81,7 +75,7 @@ public class Image_Simulator {
 
     private final double snr;
 
-//    int N = 10 + r.nextInt(25);
+    //    int N = 10 + r.nextInt(25);
     private int nCells;
 
     private final String simOutputDir;
@@ -313,6 +307,7 @@ public class Image_Simulator {
             int x = (int) Math.round(a[i].getX() / binnedXRes);
             int y = (int) Math.round(a[i].getY() / binnedYRes);
             int z = (int) Math.round(a[i].getZ() / binnedZRes);
+            if (z >= binnedStack.getSize()) z = binnedStack.getSize() - 1;
             int index = (int) Math.round(binnedStack.getVoxel(x, y, z));
             double vol = hist[index] * binnedXRes * binnedYRes * binnedZRes;
             resultsTable.setValue("Cell_Index", i, index - 1);
@@ -534,7 +529,7 @@ public class Image_Simulator {
         int nbCPUs = Runtime.getRuntime().availableProcessors();
         NoiseThread[] noiseThreads = new NoiseThread[nbCPUs];
         for (int thread = 0; thread < nbCPUs; thread++) {
-            noiseThreads[thread] = new NoiseThread(thread, nbCPUs, stack);
+            noiseThreads[thread] = new NoiseThread(thread, nbCPUs, snr, stack);
             noiseThreads[thread].start();
         }
         try {
@@ -606,33 +601,4 @@ public class Image_Simulator {
         }
     }
 
-    class NoiseThread extends Thread {
-
-        private final ImageStack stack;
-        private final int thread;
-        private final int nThreads;
-
-        public NoiseThread(int thread, int nThreads, ImageStack stack) {
-            this.thread = thread;
-            this.nThreads = nThreads;
-            this.stack = stack;
-        }
-
-        public void run() {
-            int width = stack.getWidth();
-            int height = stack.getHeight();
-            double snr2 = Math.pow(snr, 2.0);
-            for (int z = thread + 1; z <= stack.getSize(); z += nThreads) {
-                ImageProcessor slice = stack.getProcessor(z);
-                for (int y = 0; y < height; y++) {
-                    for (int x = 0; x < width; x++) {
-                        double I0 = slice.getPixelValue(x, y);
-                        double w = I0 / snr2;
-                        GammaDistribution dist = new GammaDistribution(snr2, w);
-                        slice.putPixelValue(x, y, dist.sample());
-                    }
-                }
-            }
-        }
-    }
 }
