@@ -22,6 +22,7 @@ import mcib3d.image3d.ImageInt;
 import mcib3d.image3d.distanceMap3d.EDT;
 import mcib3d.image3d.regionGrowing.Watershed3D;
 import net.calm.embryogen.noise.NoiseThread;
+import net.calm.embryogen.params.SimParams;
 import net.calm.iaclasslibrary.IO.DataWriter;
 import net.calm.iaclasslibrary.TimeAndDate.TimeAndDate;
 import net.calm.iaclasslibrary.UtilClasses.GenUtils;
@@ -38,14 +39,6 @@ public class Image_Simulator {
     private final String TITLE = "Image Simulator";
     double Dx = 0.0, Dy = 0.0, Dz = 0.0; //Diffusion coefficient in x, y, and z directions
     double DT = 0.01; //time grid for SDE
-
-    final double simSizeX;
-    final double simSizeY;
-    final double simSizeZ; //pixel size in x, y, and z axis
-
-    final double outputSizeX;
-    final double outputSizeY;
-    final double outputSizeZ;
 
     double framerate = 1.0; //frame rate of images
 
@@ -84,6 +77,8 @@ public class Image_Simulator {
 
     private final ResultsTable resultsTable = Analyzer.getResultsTable();
 
+    private final SimParams params;
+
     /**
      * @param args the command line arguments
      */
@@ -100,37 +95,38 @@ public class Image_Simulator {
     }
 
     public Image_Simulator(double[] outputVoxSize, double[] simVoxSize, double snr, int nCells, String simOutputDir, String groundTruthOutputDir) {
-        this.outputSizeX = outputVoxSize[0];
-        this.outputSizeY = outputVoxSize[1];
-        this.outputSizeZ = outputVoxSize[2];
-        this.simSizeX = simVoxSize[0];
-        this.simSizeY = simVoxSize[1];
-        this.simSizeZ = simVoxSize[2];
+        this.params = new SimParams();
+        params.setOutputSizeX(outputVoxSize[0]);
+        params.setOutputSizeY(outputVoxSize[1]);
+        params.setOutputSizeZ(outputVoxSize[2]);
+        params.setSimSizeX(simVoxSize[0]);
+        params.setSimSizeY(simVoxSize[1]);
+        params.setSimSizeZ(simVoxSize[2]);
         this.snr = snr;
         this.nCells = nCells;
         this.simOutputDir = GenUtils.openResultsDirectory(String.format("%s%s%s_snr%f_ncells%d", simOutputDir, File.separator, TITLE, this.snr, this.nCells));
         this.groundTruthDir = GenUtils.openResultsDirectory(String.format("%s%s%s_snr%f_ncells%d", groundTruthOutputDir, File.separator, TITLE, this.snr, this.nCells));
-        this.stepZ = (int) Math.round(outputSizeZ / simSizeZ);
-        this.xBin = (int) Math.round(outputSizeX / simSizeX);
-        this.yBin = (int) Math.round(outputSizeY / simSizeY);
+        this.stepZ = (int) Math.round(params.getOutputSizeX() / params.getSimSizeX());
+        this.xBin = (int) Math.round(params.getOutputSizeY() / params.getSimSizeY());
+        this.yBin = (int) Math.round(params.getOutputSizeZ() / params.getSimSizeZ());
     }
 
     public void run() {
         System.out.println(String.format("%s %s", TITLE, TimeAndDate.getCurrentTimeAndDate()));
-        System.out.println(String.format("Simulation_Size_X = %f", simSizeX));
-        System.out.println(String.format("Simulation_Size_Y = %f", simSizeY));
-        System.out.println(String.format("Simulation_Size_Z = %f", simSizeZ));
-        System.out.println(String.format("Output_Size_X = %f", outputSizeX));
-        System.out.println(String.format("Output_Size_Y = %f", outputSizeY));
-        System.out.println(String.format("Output_Size_Z = %f", outputSizeZ));
+        System.out.println(String.format("Simulation_Size_X = %f", params.getSimSizeX()));
+        System.out.println(String.format("Simulation_Size_Y = %f", params.getSimSizeY()));
+        System.out.println(String.format("Simulation_Size_Z = %f", params.getSimSizeZ()));
+        System.out.println(String.format("Output_Size_X = %f", params.getOutputSizeX()));
+        System.out.println(String.format("Output_Size_Y = %f", params.getOutputSizeY()));
+        System.out.println(String.format("Output_Size_Z = %f", params.getOutputSizeZ()));
         System.out.println(String.format("SNR = %f", snr));
         Nucleus[] a = new Nucleus[nCells];
         int tmax = (int) Math.round(1.5 / DT);
 
         //number of pixels in each direction
-        int nx = (int) Math.round(Lx / simSizeX);
-        int ny = (int) Math.round(Ly / simSizeY);
-        int nz = (int) Math.round(Lz / simSizeZ);
+        int nx = (int) Math.round(Lx / params.getSimSizeX());
+        int ny = (int) Math.round(Ly / params.getSimSizeY());
+        int nz = (int) Math.round(Lz / params.getSimSizeZ());
 
         saveNucleiStack(nx, ny, nz, a, tmax);
 
@@ -168,9 +164,9 @@ public class Image_Simulator {
             a[i].setX(0.4 * Lx + 0.2 * Lx * r.nextDouble());
             a[i].setY(0.4 * Ly + 0.2 * Ly * r.nextDouble());
             a[i].setZ(0.4 * Lz + 0.2 * Lz * r.nextDouble());
-            a[i].setxLength(A + 0.2 * A * r.nextGaussian());
-            a[i].setxLength(B + 0.2 * B * r.nextGaussian());
-            a[i].setxLength(C + 0.2 * C * r.nextGaussian());
+            a[i].setxLength(params.getA() + 0.2 * params.getA() * r.nextGaussian());
+            a[i].setxLength(params.getB() + 0.2 * params.getB() * r.nextGaussian());
+            a[i].setxLength(params.getC() + 0.2 * params.getC() * r.nextGaussian());
         }
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Simulating nuclei movement..."));
         simulation(a, tmax, nucleiOutput);
@@ -190,7 +186,7 @@ public class Image_Simulator {
         ImagePlus cellMembraneOutput = generateCellMembraneStack(nx, ny, nz, a);
 //        saveStack(cellMembraneOutput, "raw_cell_membrane_image.tif");
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Blurring membrane image..."));
-        GaussianBlur3D.blur(cellMembraneOutput, blurRadius / simSizeX, blurRadius / simSizeY, blurRadius / simSizeZ);
+        GaussianBlur3D.blur(cellMembraneOutput, blurRadius / params.getSimSizeX(), blurRadius / params.getSimSizeY(), blurRadius / params.getSimSizeZ());
 //        saveStack(cellMembraneOutput, "blurred_cell_membrane_image.tif");
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Downsizing membrane image..."));
         ImagePlus downSizedCellMembraneImage = downsizeStack(cellMembraneOutput, nx, ny, nz);
@@ -216,9 +212,9 @@ public class Image_Simulator {
 //        BioFormatsImageWriter.saveStack(binnedStack,
 //                new File(String.format("%s%s%s", outputDir, File.separator, filename)),
 //                null, FormatTools.FLOAT, "XYZCT", new int[]{binnedStack.getWidth(), binnedStack.getHeight(), binnedStack.getSize(), 1, 1},
-//                new double[]{simSizeX * nx / binnedStack.getWidth(),
-//                    simSizeY * ny / binnedStack.getHeight(),
-//                    simSizeZ * nz / binnedStack.getSize()});
+//                new double[]{params.getSimSizeX() * nx / binnedStack.getWidth(),
+//                    params.getSimSizeY() * ny / binnedStack.getHeight(),
+//                    params.getSimSizeZ() * nz / binnedStack.getSize()});
     }
 
     ImagePlus downsizeStack(ImagePlus input, int nx, int ny, int nz) {
@@ -227,9 +223,9 @@ public class Image_Simulator {
         ImageStack binnedStack = binStack(subStack.getImageStack(), xBin, yBin, Binner.SUM);
         ImagePlus imp = new ImagePlus("", binnedStack);
         Calibration cal = imp.getCalibration();
-        cal.pixelWidth = simSizeX * nx / binnedStack.getWidth();
-        cal.pixelHeight = simSizeY * ny / binnedStack.getHeight();
-        cal.pixelDepth = simSizeZ * nz / binnedStack.getSize();
+        cal.pixelWidth = params.getSimSizeX() * nx / binnedStack.getWidth();
+        cal.pixelHeight = params.getSimSizeY() * ny / binnedStack.getHeight();
+        cal.pixelDepth = params.getSimSizeZ() * nz / binnedStack.getSize();
         cal.setXUnit(String.format("%cm", IJ.micronSymbol));
         cal.setYUnit(String.format("%cm", IJ.micronSymbol));
         cal.setZUnit(String.format("%cm", IJ.micronSymbol));
@@ -300,9 +296,9 @@ public class Image_Simulator {
             GenUtils.logError(e, "Error saving ground truth images.");
         }
         int[] hist = stats.histogram16;
-        double binnedXRes = simSizeX * nx / binnedStack.getWidth();
-        double binnedYRes = simSizeY * ny / binnedStack.getHeight();
-        double binnedZRes = simSizeZ * nz / binnedStack.getSize();
+        double binnedXRes = params.getSimSizeX() * nx / binnedStack.getWidth();
+        double binnedYRes = params.getSimSizeY() * ny / binnedStack.getHeight();
+        double binnedZRes = params.getSimSizeZ() * nz / binnedStack.getSize();
         for (int i = 0; i < a.length; i++) {
             int x = (int) Math.round(a[i].getX() / binnedXRes);
             int y = (int) Math.round(a[i].getY() / binnedYRes);
@@ -461,13 +457,13 @@ public class Image_Simulator {
             pointOutput.addSlice(slice);
         }
         for (int i = 0; i < nCells; i++) {
-            int x = (int) Math.round(a[i].getX() / simSizeX);
-            int y = (int) Math.round(a[i].getY() / simSizeY);
-            int z = (int) Math.round(a[i].getZ() / simSizeZ);
+            int x = (int) Math.round(a[i].getX() / params.getSimSizeX());
+            int y = (int) Math.round(a[i].getY() / params.getSimSizeY());
+            int z = (int) Math.round(a[i].getZ() / params.getSimSizeZ());
             pointOutput.setVoxel(x, y, z, 255);
         }
         ImageHandler intImage = ImageInt.wrap(pointOutput);
-        intImage.setScale(simSizeX, simSizeZ, "microns");
+        intImage.setScale(params.getSimSizeX(), params.getSimSizeZ(), "microns");
         return intImage;
     }
 
@@ -560,9 +556,9 @@ public class Image_Simulator {
                 double varIntens = nucMaxIntens - (nucMaxIntens - nucMinIntens) * k / output.size();
                 for (int j = 0; j < output.getHeight(); j++) {
                     for (int i = 0; i < output.getWidth(); i++) {
-                        double xi = simSizeX * (2.0 * i + 1) / 2.0;
-                        double yi = simSizeY * (2.0 * j + 1) / 2.0;
-                        double zi = simSizeZ * (2.0 * k + 1) / 2.0;
+                        double xi = params.getSimSizeX() * (2.0 * i + 1) / 2.0;
+                        double yi = params.getSimSizeY() * (2.0 * j + 1) / 2.0;
+                        double zi = params.getSimSizeZ() * (2.0 * k + 1) / 2.0;
                         double intensity = Iback;
                         double intmax = 0.0;
                         for (int l = 0; l < nCells; l++) {
@@ -585,7 +581,7 @@ public class Image_Simulator {
                             zr = Math.sin(a[l].getTheta_x()) * yr2 + Math.cos(a[l].getTheta_x()) * zr2;
                             xr = xr2;
 
-                            double temp = 1 - (xr * xr / (A * A) + yr * yr / (B * B) + zr * zr / (C * C));
+                            double temp = 1 - (xr * xr / (params.getA() * params.getA()) + yr * yr / (params.getB() * params.getB()) + zr * zr / (params.getC() * params.getC()));
                             temp = (Math.tanh(sigma * temp) + 1.0) / 2.0;
                             temp = (varIntens / Math.abs((Math.tanh(sigma) + 1.0) / 2.0)) * temp;
 
