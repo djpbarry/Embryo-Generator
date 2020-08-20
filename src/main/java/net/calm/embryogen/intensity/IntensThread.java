@@ -1,17 +1,18 @@
 package net.calm.embryogen.intensity;
 
 import ij.ImageStack;
+import net.calm.embryogen.image_simulator.Nucleus;
 import net.calm.embryogen.params.SimParams;
 
 public class IntensThread extends Thread {
 
-    private final image_simulator.Nucleus[] a;
+    private final Nucleus[] a;
     private final ImageStack output;
     private final int thread;
     private final int nThreads;
     private final SimParams params;
 
-    public IntensThread(int thread, int nThreads, image_simulator.Nucleus[] a, ImageStack output, SimParams params) {
+    public IntensThread(int thread, int nThreads, Nucleus[] a, ImageStack output, SimParams params) {
         this.thread = thread;
         this.nThreads = nThreads;
         this.a = a;

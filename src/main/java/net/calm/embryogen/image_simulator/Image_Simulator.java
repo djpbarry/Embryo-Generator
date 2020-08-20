@@ -16,11 +16,11 @@ import ij.process.ByteProcessor;
 import ij.process.FloatProcessor;
 import ij.process.ImageProcessor;
 import ij.process.StackStatistics;
-import image_simulator.Nucleus;
 import mcib3d.image3d.ImageHandler;
 import mcib3d.image3d.ImageInt;
 import mcib3d.image3d.distanceMap3d.EDT;
 import mcib3d.image3d.regionGrowing.Watershed3D;
+import net.calm.embryogen.generator.NucleusGenerator;
 import net.calm.embryogen.intensity.IntensThread;
 import net.calm.embryogen.noise.NoiseThread;
 import net.calm.embryogen.params.SimParams;
@@ -123,7 +123,7 @@ public class Image_Simulator {
         int ny = (int) Math.round(Ly / params.getSimSizeY());
         int nz = (int) Math.round(Lz / params.getSimSizeZ());
 
-        initialiseNuclei(a);
+        (new NucleusGenerator(nCells, new double[]{Lx,Ly,Lz}, params)).initialiseNuclei(a);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Simulating nuclei movement..."));
         ImageStack nucOutput = generateNucleiStack(nx, ny, nz, a, tmax);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Downsizing nuclei image..."));
@@ -159,23 +159,6 @@ public class Image_Simulator {
         }
 
         IJ.log(String.format("Done %s", TimeAndDate.getCurrentTimeAndDate()));
-    }
-
-    void initialiseNuclei(Nucleus[] a) {
-        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Initialising nuclei..."));
-        //setting the initial positions of particle
-        for (int i = 0; i < nCells; i++) {
-            a[i] = new Nucleus();
-            a[i].setTheta_x(0.25 * PI * r.nextFloat());
-            a[i].setTheta_y(0.25 * PI * r.nextFloat());
-            a[i].setTheta_z(0.5 * PI * r.nextFloat());
-            a[i].setX(0.4 * Lx + 0.2 * Lx * r.nextDouble());
-            a[i].setY(0.4 * Ly + 0.2 * Ly * r.nextDouble());
-            a[i].setZ(0.4 * Lz + 0.2 * Lz * r.nextDouble());
-            a[i].setxLength(params.getA() + 0.2 * params.getA() * r.nextGaussian());
-            a[i].setxLength(params.getB() + 0.2 * params.getB() * r.nextGaussian());
-            a[i].setxLength(params.getC() + 0.2 * params.getC() * r.nextGaussian());
-        }
     }
 
     ImageStack generateNucleiStack(int nx, int ny, int nz, Nucleus[] a, int tmax) {
