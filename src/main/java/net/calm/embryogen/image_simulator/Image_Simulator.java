@@ -46,9 +46,6 @@ public class Image_Simulator {
     final double Ly = 150;
     final double Lz = 0.5; //domain size
 
-    double sigma = 2.0, Iback = 100, A = 10.0, B = 7.5, C = 7.5;
-    double nucMaxIntens = 1000.0; //mean intensity in nucleus
-    double nucMinIntens = 0.0;
     double membraneMinIntensScale = 0.0;
     double membraneMaxIntensScale = 1.0;
     double eps = 1.0, gam = 20.0;
@@ -510,7 +507,7 @@ public class Image_Simulator {
 //            System.out.println(String.format("z: %d IntensScale: %f",i, intensScale));
             ImageProcessor slice = voronoiPlusEDT.getImageStack().getProcessor(i);
             slice.add(1.0);
-            slice.multiply(Iback);
+            slice.multiply(params.getIback());
             ImageProcessor maskSlice = mask.getProcessor(i);
             maskSlice.invert();
             ImageProcessor floatMaskSlice = maskSlice.convertToFloatProcessor();
@@ -553,13 +550,13 @@ public class Image_Simulator {
 
         public void run() {
             for (int k = thread; k < output.getSize(); k += nThreads) {
-                double varIntens = nucMaxIntens - (nucMaxIntens - nucMinIntens) * k / output.size();
+                double varIntens = params.getNucMaxIntens() - (params.getNucMaxIntens() - params.getNucMinIntens()) * k / output.size();
                 for (int j = 0; j < output.getHeight(); j++) {
                     for (int i = 0; i < output.getWidth(); i++) {
                         double xi = params.getSimSizeX() * (2.0 * i + 1) / 2.0;
                         double yi = params.getSimSizeY() * (2.0 * j + 1) / 2.0;
                         double zi = params.getSimSizeZ() * (2.0 * k + 1) / 2.0;
-                        double intensity = Iback;
+                        double intensity = params.getIback();
                         double intmax = 0.0;
                         for (int l = 0; l < nCells; l++) {
                             double xd = (xi - a[l].getX());
@@ -582,8 +579,8 @@ public class Image_Simulator {
                             xr = xr2;
 
                             double temp = 1 - (xr * xr / (params.getA() * params.getA()) + yr * yr / (params.getB() * params.getB()) + zr * zr / (params.getC() * params.getC()));
-                            temp = (Math.tanh(sigma * temp) + 1.0) / 2.0;
-                            temp = (varIntens / Math.abs((Math.tanh(sigma) + 1.0) / 2.0)) * temp;
+                            temp = (Math.tanh(params.getSigma() * temp) + 1.0) / 2.0;
+                            temp = (varIntens / Math.abs((Math.tanh(params.getSigma()) + 1.0) / 2.0)) * temp;
 
                             if (temp > intmax) {
                                 intmax = temp;
