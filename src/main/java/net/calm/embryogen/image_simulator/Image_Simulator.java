@@ -22,6 +22,7 @@ import mcib3d.image3d.distanceMap3d.EDT;
 import mcib3d.image3d.regionGrowing.Watershed3D;
 import net.calm.embryogen.generator.NucleusGenerator;
 import net.calm.embryogen.intensity.IntensThread;
+import net.calm.embryogen.io.StackSaver;
 import net.calm.embryogen.noise.NoiseThread;
 import net.calm.embryogen.params.SimParams;
 import net.calm.iaclasslibrary.IO.DataWriter;
@@ -123,7 +124,7 @@ public class Image_Simulator {
         int ny = (int) Math.round(Ly / params.getSimSizeY());
         int nz = (int) Math.round(Lz / params.getSimSizeZ());
 
-        (new NucleusGenerator(nCells, new double[]{Lx,Ly,Lz}, params)).initialiseNuclei(a);
+        (new NucleusGenerator(nCells, new double[]{Lx, Ly, Lz}, params)).initialiseNuclei(a);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Simulating nuclei movement..."));
         ImageStack nucOutput = generateNucleiStack(nx, ny, nz, a, tmax);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Downsizing nuclei image..."));
@@ -131,7 +132,7 @@ public class Image_Simulator {
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Adding noise to nuclei image..."));
         addNoise(downSizedNucleiImage.getImageStack());
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Saving nuclei image..."));
-        saveNucleiStack(downSizedNucleiImage);
+        StackSaver.saveNucleiStack(downSizedNucleiImage, simOutputDir);
 
         for (int i = 0; i < a.length; i++) {
             resultsTable.setValue("Nucleus_Centroid_X", i, a[i].getX());
@@ -150,7 +151,7 @@ public class Image_Simulator {
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Adding noise to membrane image..."));
         addNoise(downSizedCellMembraneImage.getImageStack());
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Saving membrane image..."));
-        saveCompositeStack(downSizedCellMembraneImage);
+        StackSaver.saveCompositeStack(downSizedCellMembraneImage, String.format("Sim_Image_snr%f_ncells%d.tif", snr, nCells), simOutputDir);
 
         try {
             DataWriter.saveResultsTable(resultsTable, new File(String.format("%s%s%s_snr%f_ncells%d.csv", groundTruthDir, File.separator, "Ground_Truth_Data", snr, nCells)));
@@ -168,38 +169,6 @@ public class Image_Simulator {
         }
         simulation(a, tmax, nucleiOutput);
         return nucleiOutput;
-    }
-
-    void saveNucleiStack(ImagePlus nucleiOutput) {
-        try {
-            saveStack(nucleiOutput, "Nuclei.tif");
-        } catch (Exception e) {
-            GenUtils.logError(e, "Encountered problem while saving nuclei images.");
-        }
-    }
-
-    void saveCompositeStack(ImagePlus cellMembraneOutput) {
-        try {
-            String nucFileName = String.format("%s%s%s", simOutputDir, File.separator, "Nuclei.tif");
-            ImagePlus nuclei = IJ.openImage(nucFileName);
-            ImagePlus concat = (new Concatenator()).concatenate(new ImagePlus[]{nuclei, cellMembraneOutput}, false);
-            saveStack(HyperStackConverter.toHyperStack(concat, 2, concat.getNSlices(), 1, "xyzct", "composite"), String.format("Sim_Image_snr%f_ncells%d.tif", snr, nCells));
-            nuclei.changes = false;
-            nuclei.close();
-            (new File(String.format("%s%s%s", simOutputDir, File.separator, "Nuclei.tif"))).delete();
-        } catch (Exception e) {
-            GenUtils.logError(e, "Encountered problem while saving cell membrane images.");
-        }
-    }
-
-    void saveStack(ImagePlus input, String filename) {
-        IJ.saveAs(input, "TIF", String.format("%s%s%s", simOutputDir, File.separator, filename));
-//        BioFormatsImageWriter.saveStack(binnedStack,
-//                new File(String.format("%s%s%s", outputDir, File.separator, filename)),
-//                null, FormatTools.FLOAT, "XYZCT", new int[]{binnedStack.getWidth(), binnedStack.getHeight(), binnedStack.getSize(), 1, 1},
-//                new double[]{params.getSimSizeX() * nx / binnedStack.getWidth(),
-//                    params.getSimSizeY() * ny / binnedStack.getHeight(),
-//                    params.getSimSizeZ() * nz / binnedStack.getSize()});
     }
 
     ImagePlus downsizeStack(ImagePlus input, int nx, int ny, int nz) {
