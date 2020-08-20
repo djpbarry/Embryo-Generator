@@ -13,8 +13,10 @@ public class SimParams {
     private double Dx = 0.0, Dy = 0.0, Dz = 0.0; //Diffusion coefficient in x, y, and z directions
     private final double DT = 0.01; //time grid for SDE
     private final double framerate = 1.0; //frame rate of images
+    private final double membraneMinIntensScale = 0.0;
+    private final double membraneMaxIntensScale = 1.0;
 
-    public SimParams(){
+    public SimParams() {
 
     }
 
@@ -124,5 +126,13 @@ public class SimParams {
 
     public void setDz(double dz) {
         Dz = dz;
+    }
+
+    public double getMembraneMinIntensScale() {
+        return membraneMinIntensScale;
+    }
+
+    public double getMembraneMaxIntensScale() {
+        return membraneMaxIntensScale;
     }
 }

@@ -11,22 +11,19 @@ import ij.ImageStack;
 import ij.measure.ResultsTable;
 import ij.plugin.Binner;
 import ij.plugin.GaussianBlur3D;
-import ij.plugin.ImageCalculator;
 import ij.plugin.filter.Analyzer;
-import ij.process.ByteProcessor;
 import ij.process.FloatProcessor;
-import ij.process.ImageProcessor;
 import ij.process.StackStatistics;
 import mcib3d.image3d.ImageHandler;
-import mcib3d.image3d.ImageInt;
 import mcib3d.image3d.distanceMap3d.EDT;
 import mcib3d.image3d.regionGrowing.Watershed3D;
+import net.calm.embryogen.binary.BinaryProcessor;
 import net.calm.embryogen.generator.NucleusGenerator;
-import net.calm.embryogen.intensity.IntensThread;
 import net.calm.embryogen.io.StackSaver;
 import net.calm.embryogen.noise.NoiseThread;
 import net.calm.embryogen.params.SimParams;
 import net.calm.embryogen.processor.StackProcessor;
+import net.calm.embryogen.simulate.Simulation;
 import net.calm.iaclasslibrary.IO.DataWriter;
 import net.calm.iaclasslibrary.TimeAndDate.TimeAndDate;
 import net.calm.iaclasslibrary.UtilClasses.GenUtils;
@@ -46,8 +43,6 @@ public class Image_Simulator {
     final double Ly = 150;
     final double Lz = 0.5; //domain size
 
-    double membraneMinIntensScale = 0.0;
-    double membraneMaxIntensScale = 1.0;
     double eps = 1.0, gam = 20.0;
     double distanceThreshold = 75.0;
     double blurRadius = 1.5;
@@ -59,14 +54,12 @@ public class Image_Simulator {
 
     private final double PI = Math.PI;
 
-    private Random r = new Random();
-
-    static int count_BM = 0;
+    private final Random r = new Random();
 
     private final double snr;
 
     //    int N = 10 + r.nextInt(25);
-    private int nCells;
+    private final int nCells;
 
     private final String simOutputDir;
 
@@ -128,7 +121,7 @@ public class Image_Simulator {
 
         (new NucleusGenerator(nCells, new double[]{Lx, Ly, Lz}, params)).initialiseNuclei(a);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Simulating nuclei movement..."));
-        ImageStack nucOutput = generateNucleiStack(nx, ny, nz, a, tmax);
+        ImageStack nucOutput = generateNucleiStack(nx, ny, nz, a);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Downsizing nuclei image..."));
         ImagePlus downSizedNucleiImage = StackProcessor.downsizeStack(new ImagePlus("", nucOutput), nx, ny, nz, xBin, yBin, stepZ, params);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Adding noise to nuclei image..."));
@@ -164,18 +157,19 @@ public class Image_Simulator {
         IJ.log(String.format("Done %s", TimeAndDate.getCurrentTimeAndDate()));
     }
 
-    ImageStack generateNucleiStack(int nx, int ny, int nz, Nucleus[] a, int tmax) {
+    ImageStack generateNucleiStack(int nx, int ny, int nz, Nucleus[] a) {
         ImageStack nucleiOutput = new ImageStack(nx, ny);
         for (int n = 1; n <= nz; n++) {
             nucleiOutput.addSlice(new FloatProcessor(nx, ny));
         }
-        simulation(a, tmax, nucleiOutput);
+        (new Simulation(params, eps, gam, new double[]{Lx, Ly, Lz})).simulation(a, nucleiOutput);
         return nucleiOutput;
     }
 
     ImagePlus generateCellMembraneStack(int nx, int ny, int nz, Nucleus[] a) {
+        BinaryProcessor bp = new BinaryProcessor(params);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Generating nuclei centroid image..."));
-        ImageHandler pointImage = generatePointImage(nx, ny, nz, a);
+        ImageHandler pointImage = bp.generatePointImage(nx, ny, nz, a);
 //        saveStack(pointImage.getImagePlus(), "point_image.tif");
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Generating EDT..."));
         ImageHandler edt = EDT.run(pointImage, 1, true, -1);
@@ -185,10 +179,10 @@ public class Image_Simulator {
         edtDup.invert();
         edtDup.addValue(edtMaxValue + 1.0f);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Thresholding EDT..."));
-        ImageStack thresholdedEDT = getThresholdedEDT(nx, ny, nz, edtDup, distanceThreshold);
+        ImageStack thresholdedEDT = bp.getThresholdedEDT(nx, ny, nz, edtDup, distanceThreshold);
 //        saveStack(new ImagePlus("", thresholdedEDT), "thresh_edt_image.tif");
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Outlining EDT..."));
-        ImageStack edtOutline = outlineMask(nx, ny, nz, thresholdedEDT);
+        ImageStack edtOutline = bp.outlineMask(nx, ny, nz, thresholdedEDT);
 //        saveStack(new ImagePlus("", edtOutline), "outlined_edt_image.tif");
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Running watershed..."));
         Watershed3D watershed = new Watershed3D(edtDup, pointImage, distanceThreshold, 1);
@@ -201,12 +195,12 @@ public class Image_Simulator {
         edtDup = null;
         pointImage = null;
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Summing outline and watershed dams..."));
-        ImageStack voronoiPlusMaskOutline = getVoronoiPlusMaskOutline(nx, ny, nz, edtOutline, watershedDams);
+        ImageStack voronoiPlusMaskOutline = bp.getVoronoiPlusMaskOutline(nx, ny, nz, edtOutline, watershedDams);
 //        saveStack(new ImagePlus("", voronoiPlusMaskOutline), "dams_plus_outline_image.tif");
         watershedDams = null;
         edtOutline = null;
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Summing watershed dams and EDT..."));
-        return getVoronoiPlusEDT(nz, voronoiPlusMaskOutline, edt, thresholdedEDT);
+        return bp.getVoronoiPlusEDT(nz, voronoiPlusMaskOutline, edt, thresholdedEDT);
     }
 
     void printGroundTruthResults(ImageStack binnedStack, int nx, int ny, int nz, Nucleus[] a) {
@@ -225,216 +219,6 @@ public class Image_Simulator {
             resultsTable.setValue("Cell_Index", i, index - 1);
             resultsTable.setValue("Cell_Volume_Microns_Cubed", i, vol);
         }
-    }
-
-    void simulation(Nucleus[] a, int tmax, ImageStack output) {
-        initial_relaxation(a);
-        Tanh_blob(a, output);
-    }
-
-    void initial_relaxation(Nucleus[] a) {
-        int i, imax;
-        double Dxc, Dyc, Dzc;
-
-        Dxc = params.getDx();
-        Dyc = params.getDy();
-        Dzc = params.getDz();
-
-        imax = (int) Math.round(500.0 / params.getDT());
-        params.setDx(0.0);
-        params.setDy(0.0);
-        params.setDz(0.0);
-
-        for (i = 0; i < imax; i++) {
-            Euler_Method(a);
-        }
-
-        params.setDx(Dxc);
-        params.setDy(Dyc);
-        params.setDz(Dzc);
-
-    }
-
-    void Euler_Method(Nucleus[] a) {
-        Nucleus[] temp = new Nucleus[a.length];
-
-        double xi;
-        double xij, yij, zij, rij, Fijx, Fijy, Fijz;
-        int i, j;
-
-        for (i = 0; i < nCells; i++) {
-            temp[i] = a[i];
-        }
-
-        for (i = 0; i < nCells; i++) {
-
-            Fijx = 0.0;
-            Fijy = 0.0;
-            Fijz = 0.0;
-
-            for (j = 0; j < nCells; j++) {
-                if (j != i) {
-                    xij = a[j].getX() - a[i].getX();
-                    yij = a[j].getY() - a[i].getY();
-                    zij = a[j].getZ() - a[i].getZ();
-
-                    rij = Math.sqrt(xij * xij + yij * yij + zij * zij);
-                    Fijx += eps * (-3.0 * Math.pow(gam, 3.0) / Math.pow(rij, 5.0) + gam / Math.pow(rij, 3.0)) * (-xij);
-                    Fijy += eps * (-3.0 * Math.pow(gam, 3.0) / Math.pow(rij, 5.0) + gam / Math.pow(rij, 3.0)) * (-yij);
-                    Fijz += eps * (-3.0 * Math.pow(gam, 3.0) / Math.pow(rij, 5.0) + gam / Math.pow(rij, 3.0)) * (-zij);
-                }
-
-            }
-
-            xi = Box_Muller_Method(0.0, 1.0);
-            temp[i].setX(a[i].getX() - Fijx * params.getDT() + Math.sqrt(2.0 * params.getDx()) * Math.sqrt(params.getDT()) * xi);
-
-            if (temp[i].getX() < 0) {
-                temp[i].setX(0.0);
-            }
-            if (temp[i].getX() > Lx) {
-                temp[i].setX(Lx);
-            }
-
-            xi = Box_Muller_Method(0.0, 1.0);
-            temp[i].setY(a[i].getY() - Fijy * params.getDT() + Math.sqrt(2.0 * params.getDy()) * Math.sqrt(params.getDT()) * xi);
-
-            if (temp[i].getY() < 0) {
-                temp[i].setY(0.0);
-            }
-            if (temp[i].getY() > Ly) {
-                temp[i].setY(Ly);
-            }
-
-            xi = Box_Muller_Method(0.0, 1.0);
-            temp[i].setZ(a[i].getZ() - Fijz * params.getDT() + Math.sqrt(2.0 * params.getDz()) * Math.sqrt(params.getDT()) * xi);
-
-            if (temp[i].getZ() < 0) {
-                temp[i].setZ(0.0);
-            }
-            if (temp[i].getZ() > Lz) {
-                temp[i].setZ(Lz);
-            }
-
-        }
-
-        for (i = 0; i < nCells; i++) {
-            a[i] = temp[i];
-        }
-    }
-
-    double Box_Muller_Method(double m, double sd) {
-
-        double r1, r2;
-        double nrand;
-
-        r1 = r.nextDouble();
-        r2 = r.nextDouble();
-
-        do {
-
-            if (count_BM == 0) {
-                count_BM = 1;
-                nrand = sd * Math.sqrt(-2 * Math.log(r1)) * Math.cos(2 * PI * r2) + m;
-            } else {
-                count_BM = 0;
-                nrand = sd * Math.sqrt(-2 * Math.log(r1)) * Math.sin(2 * PI * r2) + m;
-            }
-
-        } while (Double.isInfinite(Math.sqrt(-2 * Math.log(r1))));
-
-        return nrand;
-
-    }
-
-    void Tanh_blob(Nucleus[] a, ImageStack output) {
-        int nbCPUs = Runtime.getRuntime().availableProcessors();
-        IntensThread[] intensThreads = new IntensThread[nbCPUs];
-        for (int thread = 0; thread < nbCPUs; thread++) {
-            intensThreads[thread] = new IntensThread(thread, nbCPUs, a, output, params);
-            intensThreads[thread].start();
-        }
-        try {
-            for (int thread = 0; thread < nbCPUs; thread++) {
-                intensThreads[thread].join();
-            }
-        } catch (InterruptedException ie) {
-            IJ.error("A thread was interrupted during output generation.");
-        }
-
-    }
-
-    ImageHandler generatePointImage(int nx, int ny, int nz, Nucleus[] a) {
-        ImageStack pointOutput = new ImageStack(nx, ny);
-        for (int n = 1; n <= nz; n++) {
-            ByteProcessor slice = new ByteProcessor(nx, ny);
-            slice.setValue(0.0);
-            slice.fill();
-            pointOutput.addSlice(slice);
-        }
-        for (int i = 0; i < nCells; i++) {
-            int x = (int) Math.round(a[i].getX() / params.getSimSizeX());
-            int y = (int) Math.round(a[i].getY() / params.getSimSizeY());
-            int z = (int) Math.round(a[i].getZ() / params.getSimSizeZ());
-            pointOutput.setVoxel(x, y, z, 255);
-        }
-        ImageHandler intImage = ImageInt.wrap(pointOutput);
-        intImage.setScale(params.getSimSizeX(), params.getSimSizeZ(), "microns");
-        return intImage;
-    }
-
-    ImageStack getThresholdedEDT(int nx, int ny, int nz, ImageHandler edt, double threshold) {
-        ImageStack thresholdedEDT = new ImageStack(nx, ny);
-        for (int i = 1; i <= nz; i++) {
-            ImageProcessor slice = edt.getImageStack().getProcessor(i);
-            slice.setThreshold(0.0, threshold, ImageProcessor.NO_LUT_UPDATE);
-            slice = slice.createMask();
-            thresholdedEDT.addSlice(slice);
-        }
-        return thresholdedEDT;
-    }
-
-    ImageStack outlineMask(int nx, int ny, int nz, ImageStack input) {
-        ImageStack outlinedMask = new ImageStack(nx, ny);
-        for (int i = 1; i <= nz; i++) {
-            ImageProcessor slice = input.getProcessor(i).duplicate();
-            assert (slice instanceof ByteProcessor);
-            ((ByteProcessor) slice).outline();
-            slice.invert();
-            outlinedMask.addSlice(slice);
-        }
-        return outlinedMask;
-    }
-
-    ImageStack getVoronoiPlusMaskOutline(int nx, int ny, int nz, ImageStack thresholdedEDT, ImageHandler lineImage) {
-        ImagePlus voronoiPlusMaskOutline = (new ImageCalculator()).run("Add create stack", new ImagePlus("", thresholdedEDT), lineImage.getImagePlus());
-        ImageStack voronoiPlusMaskOutlineStack = new ImageStack(nx, ny);
-        for (int i = 1; i <= nz; i++) {
-            ImageProcessor slice = voronoiPlusMaskOutline.getImageStack().getProcessor(i).convertToFloatProcessor();
-            slice.multiply(1.0 / 255.0);
-//            slice.add(Iback);
-            voronoiPlusMaskOutlineStack.addSlice(slice);
-        }
-        return voronoiPlusMaskOutlineStack;
-    }
-
-    ImagePlus getVoronoiPlusEDT(int nz, ImageStack voronoiPlusMaskOutlineStack, ImageHandler edt, ImageStack mask) {
-        ImagePlus voronoiPlusEDT = (new ImageCalculator()).run("Multiply create stack", new ImagePlus("", voronoiPlusMaskOutlineStack), edt.getImagePlus());
-        ImageStack scaledMask = new ImageStack(mask.getWidth(), mask.getHeight());
-        for (int i = 1; i <= nz; i++) {
-            double intensScale = membraneMaxIntensScale - (membraneMaxIntensScale - membraneMinIntensScale) * (i - 1) / nz;
-//            System.out.println(String.format("z: %d IntensScale: %f",i, intensScale));
-            ImageProcessor slice = voronoiPlusEDT.getImageStack().getProcessor(i);
-            slice.add(1.0);
-            slice.multiply(params.getIback());
-            ImageProcessor maskSlice = mask.getProcessor(i);
-            maskSlice.invert();
-            ImageProcessor floatMaskSlice = maskSlice.convertToFloatProcessor();
-            floatMaskSlice.multiply(intensScale / 255.0);
-            floatMaskSlice.add(1.0);
-            scaledMask.addSlice(floatMaskSlice);
-        }
-        return (new ImageCalculator()).run("Multiply create stack", voronoiPlusEDT, (new ImagePlus("", scaledMask)));
     }
 
     void addNoise(ImageStack stack) {
