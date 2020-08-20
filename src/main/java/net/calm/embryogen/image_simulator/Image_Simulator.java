@@ -8,9 +8,11 @@ package net.calm.embryogen.image_simulator;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.ImageStack;
-import ij.measure.Calibration;
 import ij.measure.ResultsTable;
-import ij.plugin.*;
+import ij.plugin.Binner;
+import ij.plugin.GaussianBlur3D;
+import ij.plugin.ImageCalculator;
+import ij.plugin.PNG_Writer;
 import ij.plugin.filter.Analyzer;
 import ij.process.ByteProcessor;
 import ij.process.FloatProcessor;
@@ -25,6 +27,7 @@ import net.calm.embryogen.intensity.IntensThread;
 import net.calm.embryogen.io.StackSaver;
 import net.calm.embryogen.noise.NoiseThread;
 import net.calm.embryogen.params.SimParams;
+import net.calm.embryogen.processor.StackProcessor;
 import net.calm.iaclasslibrary.IO.DataWriter;
 import net.calm.iaclasslibrary.TimeAndDate.TimeAndDate;
 import net.calm.iaclasslibrary.UtilClasses.GenUtils;
@@ -128,7 +131,7 @@ public class Image_Simulator {
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Simulating nuclei movement..."));
         ImageStack nucOutput = generateNucleiStack(nx, ny, nz, a, tmax);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Downsizing nuclei image..."));
-        ImagePlus downSizedNucleiImage = downsizeStack(new ImagePlus("", nucOutput), nx, ny, nz);
+        ImagePlus downSizedNucleiImage = StackProcessor.downsizeStack(new ImagePlus("", nucOutput), nx, ny, nz, xBin, yBin, stepZ, params);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Adding noise to nuclei image..."));
         addNoise(downSizedNucleiImage.getImageStack());
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Saving nuclei image..."));
@@ -146,12 +149,12 @@ public class Image_Simulator {
         GaussianBlur3D.blur(cellMembraneOutput, blurRadius / params.getSimSizeX(), blurRadius / params.getSimSizeY(), blurRadius / params.getSimSizeZ());
 //        saveStack(cellMembraneOutput, "blurred_cell_membrane_image.tif");
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Downsizing membrane image..."));
-        ImagePlus downSizedCellMembraneImage = downsizeStack(cellMembraneOutput, nx, ny, nz);
+        ImagePlus downSizedCellMembraneImage = StackProcessor.downsizeStack(cellMembraneOutput, nx, ny, nz, xBin, yBin, stepZ, params);
 //        saveStack(downSizedCellMembraneImage, "downsized_cell_membrane_image.tif");
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Adding noise to membrane image..."));
         addNoise(downSizedCellMembraneImage.getImageStack());
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Saving membrane image..."));
-        StackSaver.saveCompositeStack(downSizedCellMembraneImage, String.format("Sim_Image_snr%f_ncells%d.tif", snr, nCells), simOutputDir);
+        StackSaver.saveCompositeStack(downSizedCellMembraneImage, simOutputDir,String.format("Sim_Image_snr%f_ncells%d.tif", snr, nCells));
 
         try {
             DataWriter.saveResultsTable(resultsTable, new File(String.format("%s%s%s_snr%f_ncells%d.csv", groundTruthDir, File.separator, "Ground_Truth_Data", snr, nCells)));
@@ -169,38 +172,6 @@ public class Image_Simulator {
         }
         simulation(a, tmax, nucleiOutput);
         return nucleiOutput;
-    }
-
-    ImagePlus downsizeStack(ImagePlus input, int nx, int ny, int nz) {
-        ImagePlus subStack = downSizeStack(input);
-        input = null;
-        ImageStack binnedStack = binStack(subStack.getImageStack(), xBin, yBin, Binner.SUM);
-        ImagePlus imp = new ImagePlus("", binnedStack);
-        Calibration cal = imp.getCalibration();
-        cal.pixelWidth = params.getSimSizeX() * nx / binnedStack.getWidth();
-        cal.pixelHeight = params.getSimSizeY() * ny / binnedStack.getHeight();
-        cal.pixelDepth = params.getSimSizeZ() * nz / binnedStack.getSize();
-        cal.setXUnit(String.format("%cm", IJ.micronSymbol));
-        cal.setYUnit(String.format("%cm", IJ.micronSymbol));
-        cal.setZUnit(String.format("%cm", IJ.micronSymbol));
-        return imp;
-    }
-
-    ImagePlus downSizeStack(ImagePlus input) {
-        int size = input.getNSlices();
-        return (new SubstackMaker()).makeSubstack(input, String.format("1-%d-%d", size, stepZ));
-    }
-
-    ImageStack binStack(ImageStack input, int xBin, int yBin, int binningMethod) {
-        int outWidth = (int) Math.round(input.getWidth() / xBin);
-        int outHeight = (int) Math.round(input.getHeight() / yBin);
-        ImageStack binnedStack = new ImageStack(outWidth, outHeight);
-        Binner b = new Binner();
-        for (int s = 1; s <= input.getSize(); s++) {
-            ImageProcessor slice = input.getProcessor(s);
-            binnedStack.addSlice(b.shrink(slice, xBin, yBin, binningMethod));
-        }
-        return binnedStack;
     }
 
     ImagePlus generateCellMembraneStack(int nx, int ny, int nz, Nucleus[] a) {
@@ -236,8 +207,8 @@ public class Image_Simulator {
     }
 
     void saveGroundTruth(Nucleus[] a, int nx, int ny, int nz, ImagePlus groundTruth) {
-        ImagePlus subStack = downSizeStack(groundTruth);
-        ImageStack binnedStack = binStack(subStack.getImageStack(), xBin, yBin, Binner.MIN);
+        ImagePlus subStack = StackProcessor.downSizeStack(groundTruth, stepZ);
+        ImageStack binnedStack = StackProcessor.binStack(subStack.getImageStack(), xBin, yBin, Binner.MIN);
         ImagePlus binnedImp = new ImagePlus("", binnedStack);
         StackStatistics stats = new StackStatistics(binnedImp);
         try {
