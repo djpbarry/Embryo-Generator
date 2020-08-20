@@ -116,6 +116,7 @@ public class Image_Simulator {
         System.out.println(String.format("SNR = %f", snr));
         Nucleus[] a = new Nucleus[nCells];
         int tmax = (int) Math.round(1.5 / params.getDT());
+        maxframe = (int) Math.round(tmax * params.getDT() * params.getFramerate());
 
         //number of pixels in each direction
         int nx = (int) Math.round(Lx / params.getSimSizeX());
@@ -123,8 +124,14 @@ public class Image_Simulator {
         int nz = (int) Math.round(Lz / params.getSimSizeZ());
 
         initialiseNuclei(a);
-
-        saveNucleiStack(nx, ny, nz, a, tmax);
+        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Simulating nuclei movement..."));
+        ImageStack nucOutput = generateNucleiStack(nx, ny, nz, a, tmax);
+        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Downsizing nuclei image..."));
+        ImagePlus downSizedNucleiImage = downsizeStack(new ImagePlus("", nucOutput), nx, ny, nz);
+        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Adding noise to nuclei image..."));
+        addNoise(downSizedNucleiImage.getImageStack());
+        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Saving nuclei image..."));
+        saveNucleiStack(downSizedNucleiImage);
 
         for (int i = 0; i < a.length; i++) {
             resultsTable.setValue("Nucleus_Centroid_X", i, a[i].getX());
@@ -160,21 +167,18 @@ public class Image_Simulator {
         }
     }
 
-    void saveNucleiStack(int nx, int ny, int nz, Nucleus[] a, int tmax) {
+    ImageStack generateNucleiStack(int nx, int ny, int nz, Nucleus[] a, int tmax) {
         ImageStack nucleiOutput = new ImageStack(nx, ny);
         for (int n = 1; n <= nz; n++) {
             nucleiOutput.addSlice(new FloatProcessor(nx, ny));
         }
-        maxframe = (int) Math.round(tmax * params.getDT() * params.getFramerate());
-        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Simulating nuclei movement..."));
         simulation(a, tmax, nucleiOutput);
-        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Downsizing nuclei image..."));
-        ImagePlus downSizedNucleiImage = downsizeStack(new ImagePlus("", nucleiOutput), nx, ny, nz);
-        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Adding noise to nuclei image..."));
-        addNoise(downSizedNucleiImage.getImageStack());
-        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Saving nuclei image..."));
+        return nucleiOutput;
+    }
+
+    void saveNucleiStack(ImagePlus nucleiOutput) {
         try {
-            saveStack(downSizedNucleiImage, "Nuclei.tif");
+            saveStack(nucleiOutput, "Nuclei.tif");
         } catch (Exception e) {
             GenUtils.logError(e, "Encountered problem while saving nuclei images.");
         }
@@ -379,7 +383,7 @@ public class Image_Simulator {
             }
 
             xi = Box_Muller_Method(0.0, 1.0);
-            temp[i].setY(a[i].getY() - Fijy * params.getDT() + Math.sqrt(2.0 *  params.getDy()) * Math.sqrt(params.getDT()) * xi);
+            temp[i].setY(a[i].getY() - Fijy * params.getDT() + Math.sqrt(2.0 * params.getDy()) * Math.sqrt(params.getDT()) * xi);
 
             if (temp[i].getY() < 0) {
                 temp[i].setY(0.0);
@@ -389,7 +393,7 @@ public class Image_Simulator {
             }
 
             xi = Box_Muller_Method(0.0, 1.0);
-            temp[i].setZ(a[i].getZ() - Fijz * params.getDT() + Math.sqrt(2.0 *  params.getDz()) * Math.sqrt(params.getDT()) * xi);
+            temp[i].setZ(a[i].getZ() - Fijz * params.getDT() + Math.sqrt(2.0 * params.getDz()) * Math.sqrt(params.getDT()) * xi);
 
             if (temp[i].getZ() < 0) {
                 temp[i].setZ(0.0);
