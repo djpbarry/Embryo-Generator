@@ -38,10 +38,6 @@ import java.util.Random;
 public class Image_Simulator {
 
     private final String TITLE = "Image Simulator";
-    double Dx = 0.0, Dy = 0.0, Dz = 0.0; //Diffusion coefficient in x, y, and z directions
-    double DT = 0.01; //time grid for SDE
-
-    double framerate = 1.0; //frame rate of images
 
     final double Lx = 150;
     final double Ly = 150;
@@ -119,14 +115,14 @@ public class Image_Simulator {
         System.out.println(String.format("Output_Size_Z = %f", params.getOutputSizeZ()));
         System.out.println(String.format("SNR = %f", snr));
         Nucleus[] a = new Nucleus[nCells];
-        int tmax = (int) Math.round(1.5 / DT);
+        int tmax = (int) Math.round(1.5 / params.getDT());
 
         //number of pixels in each direction
         int nx = (int) Math.round(Lx / params.getSimSizeX());
         int ny = (int) Math.round(Ly / params.getSimSizeY());
         int nz = (int) Math.round(Lz / params.getSimSizeZ());
 
-        initialseNuclei(a);
+        initialiseNuclei(a);
 
         saveNucleiStack(nx, ny, nz, a, tmax);
 
@@ -147,7 +143,7 @@ public class Image_Simulator {
         IJ.log(String.format("Done %s", TimeAndDate.getCurrentTimeAndDate()));
     }
 
-    void initialseNuclei(Nucleus[] a) {
+    void initialiseNuclei(Nucleus[] a) {
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Initialising nuclei..."));
         //setting the initial positions of particle
         for (int i = 0; i < nCells; i++) {
@@ -169,7 +165,7 @@ public class Image_Simulator {
         for (int n = 1; n <= nz; n++) {
             nucleiOutput.addSlice(new FloatProcessor(nx, ny));
         }
-        maxframe = (int) Math.round(tmax * DT * framerate);
+        maxframe = (int) Math.round(tmax * params.getDT() * params.getFramerate());
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Simulating nuclei movement..."));
         simulation(a, tmax, nucleiOutput);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Downsizing nuclei image..."));
@@ -322,22 +318,22 @@ public class Image_Simulator {
         int i, imax;
         double Dxc, Dyc, Dzc;
 
-        Dxc = Dx;
-        Dyc = Dy;
-        Dzc = Dz;
+        Dxc = params.getDx();
+        Dyc = params.getDy();
+        Dzc = params.getDz();
 
-        imax = (int) Math.round(500.0 / DT);
-        Dx = 0.0;
-        Dy = 0.0;
-        Dz = 0.0;
+        imax = (int) Math.round(500.0 / params.getDT());
+        params.setDx(0.0);
+        params.setDy(0.0);
+        params.setDz(0.0);
 
         for (i = 0; i < imax; i++) {
             Euler_Method(a);
         }
 
-        Dx = Dxc;
-        Dy = Dyc;
-        Dz = Dzc;
+        params.setDx(Dxc);
+        params.setDy(Dyc);
+        params.setDz(Dzc);
 
     }
 
@@ -373,7 +369,7 @@ public class Image_Simulator {
             }
 
             xi = Box_Muller_Method(0.0, 1.0);
-            temp[i].setX(a[i].getX() - Fijx * DT + Math.sqrt(2.0 * Dx) * Math.sqrt(DT) * xi);
+            temp[i].setX(a[i].getX() - Fijx * params.getDT() + Math.sqrt(2.0 * params.getDx()) * Math.sqrt(params.getDT()) * xi);
 
             if (temp[i].getX() < 0) {
                 temp[i].setX(0.0);
@@ -383,7 +379,7 @@ public class Image_Simulator {
             }
 
             xi = Box_Muller_Method(0.0, 1.0);
-            temp[i].setY(a[i].getY() - Fijy * DT + Math.sqrt(2.0 * Dy) * Math.sqrt(DT) * xi);
+            temp[i].setY(a[i].getY() - Fijy * params.getDT() + Math.sqrt(2.0 *  params.getDy()) * Math.sqrt(params.getDT()) * xi);
 
             if (temp[i].getY() < 0) {
                 temp[i].setY(0.0);
@@ -393,7 +389,7 @@ public class Image_Simulator {
             }
 
             xi = Box_Muller_Method(0.0, 1.0);
-            temp[i].setZ(a[i].getZ() - Fijz * DT + Math.sqrt(2.0 * Dz) * Math.sqrt(DT) * xi);
+            temp[i].setZ(a[i].getZ() - Fijz * params.getDT() + Math.sqrt(2.0 *  params.getDz()) * Math.sqrt(params.getDT()) * xi);
 
             if (temp[i].getZ() < 0) {
                 temp[i].setZ(0.0);

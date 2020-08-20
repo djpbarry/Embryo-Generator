@@ -10,6 +10,9 @@ public class SimParams {
     private final double sigma = 2.0, Iback = 100, A = 10.0, B = 7.5, C = 7.5;
     private final double nucMaxIntens = 1000.0; //mean intensity in nucleus
     private final double nucMinIntens = 0.0;
+    private double Dx = 0.0, Dy = 0.0, Dz = 0.0; //Diffusion coefficient in x, y, and z directions
+    private final double DT = 0.01; //time grid for SDE
+    private final double framerate = 1.0; //frame rate of images
 
     public SimParams(){
 
@@ -89,5 +92,37 @@ public class SimParams {
 
     public double getNucMinIntens() {
         return nucMinIntens;
+    }
+
+    public double getDx() {
+        return Dx;
+    }
+
+    public double getDy() {
+        return Dy;
+    }
+
+    public double getDz() {
+        return Dz;
+    }
+
+    public double getDT() {
+        return DT;
+    }
+
+    public double getFramerate() {
+        return framerate;
+    }
+
+    public void setDx(double dx) {
+        Dx = dx;
+    }
+
+    public void setDy(double dy) {
+        Dy = dy;
+    }
+
+    public void setDz(double dz) {
+        Dz = dz;
     }
 }
