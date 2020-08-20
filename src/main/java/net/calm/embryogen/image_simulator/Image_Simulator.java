@@ -12,7 +12,6 @@ import ij.measure.ResultsTable;
 import ij.plugin.Binner;
 import ij.plugin.GaussianBlur3D;
 import ij.plugin.ImageCalculator;
-import ij.plugin.PNG_Writer;
 import ij.plugin.filter.Analyzer;
 import ij.process.ByteProcessor;
 import ij.process.FloatProcessor;
@@ -154,7 +153,7 @@ public class Image_Simulator {
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Adding noise to membrane image..."));
         addNoise(downSizedCellMembraneImage.getImageStack());
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Saving membrane image..."));
-        StackSaver.saveCompositeStack(downSizedCellMembraneImage, simOutputDir,String.format("Sim_Image_snr%f_ncells%d.tif", snr, nCells));
+        StackSaver.saveCompositeStack(downSizedCellMembraneImage, simOutputDir, String.format("Sim_Image_snr%f_ncells%d.tif", snr, nCells));
 
         try {
             DataWriter.saveResultsTable(resultsTable, new File(String.format("%s%s%s_snr%f_ncells%d.csv", groundTruthDir, File.separator, "Ground_Truth_Data", snr, nCells)));
@@ -194,7 +193,11 @@ public class Image_Simulator {
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Running watershed..."));
         Watershed3D watershed = new Watershed3D(edtDup, pointImage, distanceThreshold, 1);
         ImageHandler watershedDams = watershed.getDamImage();
-        saveGroundTruth(a, nx, ny, nz, watershed.getWatershedImage3D().getImagePlus());
+        ImagePlus subStack = StackProcessor.downSizeStack(watershed.getWatershedImage3D().getImagePlus(), stepZ);
+        ImageStack binnedStack = StackProcessor.binStack(subStack.getImageStack(), xBin, yBin, Binner.MIN);
+        ImagePlus binnedImp = new ImagePlus("", binnedStack);
+        printGroundTruthResults(binnedStack, nx, ny, nz, a);
+        StackSaver.saveGroundTruth(binnedImp, groundTruthDir);
         edtDup = null;
         pointImage = null;
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Summing outline and watershed dams..."));
@@ -206,20 +209,8 @@ public class Image_Simulator {
         return getVoronoiPlusEDT(nz, voronoiPlusMaskOutline, edt, thresholdedEDT);
     }
 
-    void saveGroundTruth(Nucleus[] a, int nx, int ny, int nz, ImagePlus groundTruth) {
-        ImagePlus subStack = StackProcessor.downSizeStack(groundTruth, stepZ);
-        ImageStack binnedStack = StackProcessor.binStack(subStack.getImageStack(), xBin, yBin, Binner.MIN);
-        ImagePlus binnedImp = new ImagePlus("", binnedStack);
-        StackStatistics stats = new StackStatistics(binnedImp);
-        try {
-            PNG_Writer pngW = new PNG_Writer();
-            for (int s = 1; s <= binnedImp.getNSlices(); s++) {
-                ImagePlus imp2 = new ImagePlus("", binnedStack.getProcessor(s));
-                pngW.writeImage(imp2, String.format("%s%scell_ground_truth_z%d.png", groundTruthDir, File.separator, s), 0);
-            }
-        } catch (Exception e) {
-            GenUtils.logError(e, "Error saving ground truth images.");
-        }
+    void printGroundTruthResults(ImageStack binnedStack, int nx, int ny, int nz, Nucleus[] a) {
+        StackStatistics stats = new StackStatistics(new ImagePlus("", binnedStack));
         int[] hist = stats.histogram16;
         double binnedXRes = params.getSimSizeX() * nx / binnedStack.getWidth();
         double binnedYRes = params.getSimSizeY() * ny / binnedStack.getHeight();

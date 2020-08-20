@@ -2,8 +2,10 @@ package net.calm.embryogen.io;
 
 import ij.IJ;
 import ij.ImagePlus;
+import ij.ImageStack;
 import ij.plugin.Concatenator;
 import ij.plugin.HyperStackConverter;
+import ij.plugin.PNG_Writer;
 import net.calm.iaclasslibrary.UtilClasses.GenUtils;
 
 import java.io.File;
@@ -40,4 +42,19 @@ public class StackSaver {
             GenUtils.logError(e, "Encountered problem while saving cell membrane images.");
         }
     }
+
+    public static void saveGroundTruth(ImagePlus imp, String groundTruthDir) {
+        ImageStack stack = imp.getImageStack();
+        try {
+            PNG_Writer pngW = new PNG_Writer();
+            for (int s = 1; s <= imp.getNSlices(); s++) {
+                ImagePlus imp2 = new ImagePlus("", stack.getProcessor(s));
+                pngW.writeImage(imp2, String.format("%s%scell_ground_truth_z%d.png", groundTruthDir, File.separator, s), 0);
+            }
+        } catch (Exception e) {
+            GenUtils.logError(e, "Error saving ground truth images.");
+        }
+    }
+
+
 }
