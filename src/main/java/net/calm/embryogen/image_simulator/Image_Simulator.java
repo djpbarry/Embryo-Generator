@@ -126,6 +126,8 @@ public class Image_Simulator {
         int ny = (int) Math.round(Ly / params.getSimSizeY());
         int nz = (int) Math.round(Lz / params.getSimSizeZ());
 
+        initialseNuclei(a);
+
         saveNucleiStack(nx, ny, nz, a, tmax);
 
         for (int i = 0; i < a.length; i++) {
@@ -145,13 +147,7 @@ public class Image_Simulator {
         IJ.log(String.format("Done %s", TimeAndDate.getCurrentTimeAndDate()));
     }
 
-    void saveNucleiStack(int nx, int ny, int nz, Nucleus[] a, int tmax) {
-        ImageStack nucleiOutput = new ImageStack(nx, ny);
-        for (int n = 1; n <= nz; n++) {
-            nucleiOutput.addSlice(new FloatProcessor(nx, ny));
-        }
-        maxframe = (int) Math.round(tmax * DT * framerate);
-
+    void initialseNuclei(Nucleus[] a) {
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Initialising nuclei..."));
         //setting the initial positions of particle
         for (int i = 0; i < nCells; i++) {
@@ -166,6 +162,14 @@ public class Image_Simulator {
             a[i].setxLength(params.getB() + 0.2 * params.getB() * r.nextGaussian());
             a[i].setxLength(params.getC() + 0.2 * params.getC() * r.nextGaussian());
         }
+    }
+
+    void saveNucleiStack(int nx, int ny, int nz, Nucleus[] a, int tmax) {
+        ImageStack nucleiOutput = new ImageStack(nx, ny);
+        for (int n = 1; n <= nz; n++) {
+            nucleiOutput.addSlice(new FloatProcessor(nx, ny));
+        }
+        maxframe = (int) Math.round(tmax * DT * framerate);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Simulating nuclei movement..."));
         simulation(a, tmax, nucleiOutput);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Downsizing nuclei image..."));
