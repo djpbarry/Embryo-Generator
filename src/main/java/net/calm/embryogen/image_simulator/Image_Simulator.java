@@ -20,7 +20,7 @@ import mcib3d.image3d.regionGrowing.Watershed3D;
 import net.calm.embryogen.binary.BinaryProcessor;
 import net.calm.embryogen.generator.NucleusGenerator;
 import net.calm.embryogen.io.StackSaver;
-import net.calm.embryogen.noise.NoiseThread;
+import net.calm.embryogen.noise.NoiseGenerator;
 import net.calm.embryogen.params.SimParams;
 import net.calm.embryogen.processor.StackProcessor;
 import net.calm.embryogen.simulate.Simulation;
@@ -125,7 +125,7 @@ public class Image_Simulator {
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Downsizing nuclei image..."));
         ImagePlus downSizedNucleiImage = StackProcessor.downsizeStack(new ImagePlus("", nucOutput), nx, ny, nz, xBin, yBin, stepZ, params);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Adding noise to nuclei image..."));
-        addNoise(downSizedNucleiImage.getImageStack());
+        NoiseGenerator.addNoise(downSizedNucleiImage.getImageStack(), snr);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Saving nuclei image..."));
         StackSaver.saveNucleiStack(downSizedNucleiImage, simOutputDir);
 
@@ -144,7 +144,7 @@ public class Image_Simulator {
         ImagePlus downSizedCellMembraneImage = StackProcessor.downsizeStack(cellMembraneOutput, nx, ny, nz, xBin, yBin, stepZ, params);
 //        saveStack(downSizedCellMembraneImage, "downsized_cell_membrane_image.tif");
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Adding noise to membrane image..."));
-        addNoise(downSizedCellMembraneImage.getImageStack());
+        NoiseGenerator.addNoise(downSizedCellMembraneImage.getImageStack(), snr);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Saving membrane image..."));
         StackSaver.saveCompositeStack(downSizedCellMembraneImage, simOutputDir, String.format("Sim_Image_snr%f_ncells%d.tif", snr, nCells));
 
@@ -220,21 +220,4 @@ public class Image_Simulator {
             resultsTable.setValue("Cell_Volume_Microns_Cubed", i, vol);
         }
     }
-
-    void addNoise(ImageStack stack) {
-        int nbCPUs = Runtime.getRuntime().availableProcessors();
-        NoiseThread[] noiseThreads = new NoiseThread[nbCPUs];
-        for (int thread = 0; thread < nbCPUs; thread++) {
-            noiseThreads[thread] = new NoiseThread(thread, nbCPUs, snr, stack);
-            noiseThreads[thread].start();
-        }
-        try {
-            for (int thread = 0; thread < nbCPUs; thread++) {
-                noiseThreads[thread].join();
-            }
-        } catch (InterruptedException ie) {
-            IJ.error("A thread was interrupted during output generation.");
-        }
-    }
-
 }
