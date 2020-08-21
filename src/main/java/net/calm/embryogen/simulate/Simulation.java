@@ -31,7 +31,7 @@ public class Simulation {
     }
 
     public void simulation(Nucleus[] a, ImageStack output) {
-        initial_relaxation(a);
+        if (params.isCluster()) initial_relaxation(a);
         Tanh_blob(a, output);
     }
 

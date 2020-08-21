@@ -47,13 +47,13 @@ public class StackSaver {
         }
     }
 
-    public static void saveGroundTruth(ImagePlus imp, String groundTruthDir) {
+    public static void saveGroundTruth(ImagePlus imp, String groundTruthDir, int transparencyIndex) {
         ImageStack stack = imp.getImageStack();
         try {
             PNG_Writer pngW = new PNG_Writer();
             for (int s = 1; s <= imp.getNSlices(); s++) {
                 ImagePlus imp2 = new ImagePlus("", stack.getProcessor(s));
-                pngW.writeImage(imp2, String.format("%s%scell_ground_truth_z%d.png", groundTruthDir, File.separator, s), 0);
+                pngW.writeImage(imp2, String.format("%s%scell_ground_truth_z%d.png", groundTruthDir, File.separator, s), transparencyIndex);
             }
         } catch (Exception e) {
             GenUtils.logError(e, "Error saving ground truth images.");

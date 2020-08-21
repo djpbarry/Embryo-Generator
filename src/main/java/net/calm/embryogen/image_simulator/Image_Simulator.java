@@ -41,7 +41,7 @@ public class Image_Simulator {
 
     final double Lx = 150;
     final double Ly = 150;
-    final double Lz = 0.5; //domain size
+    final double Lz = 10; //domain size
 
     double eps = 1.0, gam = 20.0;
     double distanceThreshold = 75.0;
@@ -63,7 +63,9 @@ public class Image_Simulator {
 
     private final String simOutputDir;
 
-    private final String groundTruthDir;
+    private final String membraneGroundTruthDir;
+
+    private final String nucleiGroundTruthDir;
 
     private final ResultsTable resultsTable = Analyzer.getResultsTable();
 
@@ -82,11 +84,11 @@ public class Image_Simulator {
         double sy = Double.parseDouble(args[4]);
         double sz = Double.parseDouble(args[5]);
         System.setProperty("java.awt.headless", "true");
-        (new Image_Simulator(new double[]{px, py, pz}, new double[]{sx, sy, sz}, Double.parseDouble(args[6]), Integer.parseInt(args[7]), args[8], args[9])).run();
+        (new Image_Simulator(new double[]{px, py, pz}, new double[]{sx, sy, sz}, Double.parseDouble(args[6]), Integer.parseInt(args[7]), args[8])).run();
         System.exit(0);
     }
 
-    public Image_Simulator(double[] outputVoxSize, double[] simVoxSize, double snr, int nCells, String simOutputDir, String groundTruthOutputDir) {
+    public Image_Simulator(double[] outputVoxSize, double[] simVoxSize, double snr, int nCells, String outputDir) {
         this.params = new SimParams();
         params.setOutputSizeX(outputVoxSize[0]);
         params.setOutputSizeY(outputVoxSize[1]);
@@ -97,11 +99,12 @@ public class Image_Simulator {
         params.setCluster(false);
         this.snr = snr;
         this.nCells = nCells;
-        this.simOutputDir = GenUtils.openResultsDirectory(String.format("%s%s%s_snr%f_ncells%d", simOutputDir, File.separator, TITLE, this.snr, this.nCells));
-        this.groundTruthDir = GenUtils.openResultsDirectory(String.format("%s%s%s_snr%f_ncells%d", groundTruthOutputDir, File.separator, TITLE, this.snr, this.nCells));
-        this.stepZ = (int) Math.round(params.getOutputSizeX() / params.getSimSizeX());
-        this.xBin = (int) Math.round(params.getOutputSizeY() / params.getSimSizeY());
-        this.yBin = (int) Math.round(params.getOutputSizeZ() / params.getSimSizeZ());
+        this.simOutputDir = GenUtils.openResultsDirectory(String.format("%s%ssim_output%s%s_snr%f_ncells%d", outputDir, File.separator, File.separator, TITLE, this.snr, this.nCells));
+        this.membraneGroundTruthDir = GenUtils.openResultsDirectory(String.format("%s%smembrane_ground_truth%s%s_snr%f_ncells%d", outputDir, File.separator, File.separator, TITLE, this.snr, this.nCells));
+        this.nucleiGroundTruthDir = GenUtils.openResultsDirectory(String.format("%s%snuclei_ground_truth%s%s_snr%f_ncells%d", outputDir, File.separator, File.separator, TITLE, this.snr, this.nCells));
+        this.xBin = (int) Math.round(params.getOutputSizeX() / params.getSimSizeX());
+        this.yBin = (int) Math.round(params.getOutputSizeY() / params.getSimSizeY());
+        this.stepZ = (int) Math.round(params.getOutputSizeZ() / params.getSimSizeZ());
     }
 
     public void run() {
@@ -157,8 +160,10 @@ public class Image_Simulator {
             StackSaver.saveCompositeStack(null, simOutputDir, outputFilename);
         }
 
+        saveNucleiGroundTruth(nx, ny, nz, a);
+
         try {
-            DataWriter.saveResultsTable(resultsTable, new File(String.format("%s%s%s_snr%f_ncells%d.csv", groundTruthDir, File.separator, "Ground_Truth_Data", snr, nCells)));
+            DataWriter.saveResultsTable(resultsTable, new File(String.format("%s%s%s_snr%f_ncells%d.csv", membraneGroundTruthDir, File.separator, "Ground_Truth_Data", snr, nCells)));
         } catch (IOException e) {
             GenUtils.logError(e, "Error saving ground truth data.");
         }
@@ -200,7 +205,7 @@ public class Image_Simulator {
         ImageStack binnedStack = StackProcessor.binStack(subStack.getImageStack(), xBin, yBin, Binner.MIN);
         ImagePlus binnedImp = new ImagePlus("", binnedStack);
         printGroundTruthResults(binnedStack, nx, ny, nz, a);
-        StackSaver.saveGroundTruth(binnedImp, groundTruthDir);
+        StackSaver.saveGroundTruth(binnedImp, membraneGroundTruthDir, 0);
         edtDup = null;
         pointImage = null;
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Summing outline and watershed dams..."));
@@ -210,6 +215,13 @@ public class Image_Simulator {
         edtOutline = null;
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Summing watershed dams and EDT..."));
         return bp.getVoronoiPlusEDT(nz, voronoiPlusMaskOutline, edt, thresholdedEDT);
+    }
+
+    void saveNucleiGroundTruth(int nx, int ny, int nz, Nucleus[] a) {
+        BinaryProcessor bp = new BinaryProcessor(params);
+        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Generating nuclei ground truth image..."));
+        ImageHandler pointImage = bp.generatePointImage(nx, ny, nz, a);
+        StackSaver.saveGroundTruth(pointImage.getImagePlus(), nucleiGroundTruthDir, 255);
     }
 
     void printGroundTruthResults(ImageStack binnedStack, int nx, int ny, int nz, Nucleus[] a) {
