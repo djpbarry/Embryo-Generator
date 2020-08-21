@@ -15,6 +15,7 @@ public class SimParams {
     private final double framerate = 1.0; //frame rate of images
     private final double membraneMinIntensScale = 0.0;
     private final double membraneMaxIntensScale = 1.0;
+    private boolean cluster = false;
 
     public SimParams() {
 
@@ -134,5 +135,13 @@ public class SimParams {
 
     public double getMembraneMaxIntensScale() {
         return membraneMaxIntensScale;
+    }
+
+    public boolean isCluster() {
+        return cluster;
+    }
+
+    public void setCluster(boolean cluster) {
+        this.cluster = cluster;
     }
 }

@@ -69,6 +69,8 @@ public class Image_Simulator {
 
     private final SimParams params;
 
+    private final boolean makeMembranes = false;
+
     /**
      * @param args the command line arguments
      */
@@ -92,6 +94,7 @@ public class Image_Simulator {
         params.setSimSizeX(simVoxSize[0]);
         params.setSimSizeY(simVoxSize[1]);
         params.setSimSizeZ(simVoxSize[2]);
+        params.setCluster(false);
         this.snr = snr;
         this.nCells = nCells;
         this.simOutputDir = GenUtils.openResultsDirectory(String.format("%s%s%s_snr%f_ncells%d", simOutputDir, File.separator, TITLE, this.snr, this.nCells));
@@ -135,18 +138,24 @@ public class Image_Simulator {
             resultsTable.setValue("Nucleus_Centroid_Z", i, a[i].getZ());
         }
 
-        ImagePlus cellMembraneOutput = generateCellMembraneStack(nx, ny, nz, a);
+        String outputFilename = String.format("Sim_Image_snr%f_ncells%d.tif", snr, nCells);
+
+        if (makeMembranes) {
+            ImagePlus cellMembraneOutput = generateCellMembraneStack(nx, ny, nz, a);
 //        saveStack(cellMembraneOutput, "raw_cell_membrane_image.tif");
-        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Blurring membrane image..."));
-        GaussianBlur3D.blur(cellMembraneOutput, blurRadius / params.getSimSizeX(), blurRadius / params.getSimSizeY(), blurRadius / params.getSimSizeZ());
+            System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Blurring membrane image..."));
+            GaussianBlur3D.blur(cellMembraneOutput, blurRadius / params.getSimSizeX(), blurRadius / params.getSimSizeY(), blurRadius / params.getSimSizeZ());
 //        saveStack(cellMembraneOutput, "blurred_cell_membrane_image.tif");
-        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Downsizing membrane image..."));
-        ImagePlus downSizedCellMembraneImage = StackProcessor.downsizeStack(cellMembraneOutput, nx, ny, nz, xBin, yBin, stepZ, params);
+            System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Downsizing membrane image..."));
+            ImagePlus downSizedCellMembraneImage = StackProcessor.downsizeStack(cellMembraneOutput, nx, ny, nz, xBin, yBin, stepZ, params);
 //        saveStack(downSizedCellMembraneImage, "downsized_cell_membrane_image.tif");
-        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Adding noise to membrane image..."));
-        NoiseGenerator.addNoise(downSizedCellMembraneImage.getImageStack(), snr);
-        System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Saving membrane image..."));
-        StackSaver.saveCompositeStack(downSizedCellMembraneImage, simOutputDir, String.format("Sim_Image_snr%f_ncells%d.tif", snr, nCells));
+            System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Adding noise to membrane image..."));
+            NoiseGenerator.addNoise(downSizedCellMembraneImage.getImageStack(), snr);
+            System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Saving final output..."));
+            StackSaver.saveCompositeStack(downSizedCellMembraneImage, simOutputDir, outputFilename);
+        } else {
+            StackSaver.saveCompositeStack(null, simOutputDir, outputFilename);
+        }
 
         try {
             DataWriter.saveResultsTable(resultsTable, new File(String.format("%s%s%s_snr%f_ncells%d.csv", groundTruthDir, File.separator, "Ground_Truth_Data", snr, nCells)));

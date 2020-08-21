@@ -30,8 +30,12 @@ public class StackSaver {
     }
 
     public static void saveCompositeStack(ImagePlus cellMembraneOutput, String simOutputDir, String imageFileName) {
+        String nucFileName = String.format("%s%s%s", simOutputDir, File.separator, "Nuclei.tif");
+        if (cellMembraneOutput == null) {
+            (new File(nucFileName)).renameTo(new File(String.format("%s%s%s", simOutputDir, File.separator, imageFileName)));
+            return;
+        }
         try {
-            String nucFileName = String.format("%s%s%s", simOutputDir, File.separator, "Nuclei.tif");
             ImagePlus nuclei = IJ.openImage(nucFileName);
             ImagePlus concat = (new Concatenator()).concatenate(new ImagePlus[]{nuclei, cellMembraneOutput}, false);
             StackSaver.saveStack(HyperStackConverter.toHyperStack(concat, 2, concat.getNSlices(), 1, "xyzct", "composite"), imageFileName, simOutputDir);

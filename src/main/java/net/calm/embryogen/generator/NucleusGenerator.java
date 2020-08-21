@@ -32,9 +32,15 @@ public class NucleusGenerator {
             a[i].setTheta_x(0.25 * PI * r.nextFloat());
             a[i].setTheta_y(0.25 * PI * r.nextFloat());
             a[i].setTheta_z(0.5 * PI * r.nextFloat());
-            a[i].setX(0.4 * Lx + 0.2 * Lx * r.nextDouble());
-            a[i].setY(0.4 * Ly + 0.2 * Ly * r.nextDouble());
-            a[i].setZ(0.4 * Lz + 0.2 * Lz * r.nextDouble());
+            if (params.isCluster()) {
+                a[i].setX(0.4 * Lx + 0.2 * Lx * r.nextDouble());
+                a[i].setY(0.4 * Ly + 0.2 * Ly * r.nextDouble());
+                a[i].setZ(0.4 * Lz + 0.2 * Lz * r.nextDouble());
+            } else {
+                a[i].setX(Lx * r.nextDouble());
+                a[i].setY(Ly * r.nextDouble());
+                a[i].setZ(Lz * r.nextDouble());
+            }
             a[i].setxLength(params.getA() + 0.2 * params.getA() * r.nextGaussian());
             a[i].setxLength(params.getB() + 0.2 * params.getB() * r.nextGaussian());
             a[i].setxLength(params.getC() + 0.2 * params.getC() * r.nextGaussian());
