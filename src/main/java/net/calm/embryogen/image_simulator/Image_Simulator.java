@@ -39,9 +39,9 @@ public class Image_Simulator {
 
     private final String TITLE = "Image Simulator";
 
-    final double Lx = 150;
-    final double Ly = 150;
-    final double Lz = 10; //domain size
+    private final double Lx;
+    private final double Ly;
+    private final double Lz; //domain size
 
     double eps = 1.0, gam = 20.0;
     double distanceThreshold = 75.0;
@@ -83,12 +83,15 @@ public class Image_Simulator {
         double sx = Double.parseDouble(args[3]);
         double sy = Double.parseDouble(args[4]);
         double sz = Double.parseDouble(args[5]);
+        int lx = (int) Math.round(Double.parseDouble(args[6]));
+        int ly = (int) Math.round(Double.parseDouble(args[7]));
+        int lz = (int) Math.round(Double.parseDouble(args[8]));
         System.setProperty("java.awt.headless", "true");
-        (new Image_Simulator(new double[]{px, py, pz}, new double[]{sx, sy, sz}, Double.parseDouble(args[6]), Integer.parseInt(args[7]), args[8])).run();
+        (new Image_Simulator(new double[]{px, py, pz}, new double[]{sx, sy, sz}, new int[]{lx, ly, lz}, Double.parseDouble(args[6]), Integer.parseInt(args[7]), args[8])).run();
         System.exit(0);
     }
 
-    public Image_Simulator(double[] outputVoxSize, double[] simVoxSize, double snr, int nCells, String outputDir) {
+    public Image_Simulator(double[] outputVoxSize, double[] simVoxSize, int[] domainSize, double snr, int nCells, String outputDir) {
         this.params = new SimParams();
         params.setOutputSizeX(outputVoxSize[0]);
         params.setOutputSizeY(outputVoxSize[1]);
@@ -105,6 +108,9 @@ public class Image_Simulator {
         this.xBin = (int) Math.round(params.getOutputSizeX() / params.getSimSizeX());
         this.yBin = (int) Math.round(params.getOutputSizeY() / params.getSimSizeY());
         this.stepZ = (int) Math.round(params.getOutputSizeZ() / params.getSimSizeZ());
+        this.Lx = domainSize[0];
+        this.Ly = domainSize[1];
+        this.Lz = domainSize[2];
     }
 
     public void run() {
