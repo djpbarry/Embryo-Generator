@@ -71,7 +71,7 @@ public class Image_Simulator {
 
     private final SimParams params;
 
-    private final boolean makeMembranes = false;
+    private final boolean makeMembranes = true;
 
     /**
      * @param args the command line arguments
@@ -87,7 +87,7 @@ public class Image_Simulator {
         int ly = (int) Math.round(Double.parseDouble(args[7]));
         int lz = (int) Math.round(Double.parseDouble(args[8]));
         System.setProperty("java.awt.headless", "true");
-        (new Image_Simulator(new double[]{px, py, pz}, new double[]{sx, sy, sz}, new int[]{lx, ly, lz}, Double.parseDouble(args[6]), Integer.parseInt(args[7]), args[8])).run();
+        (new Image_Simulator(new double[]{px, py, pz}, new double[]{sx, sy, sz}, new int[]{lx, ly, lz}, Double.parseDouble(args[9]), Integer.parseInt(args[10]), args[11])).run();
         System.exit(0);
     }
 
@@ -99,7 +99,7 @@ public class Image_Simulator {
         params.setSimSizeX(simVoxSize[0]);
         params.setSimSizeY(simVoxSize[1]);
         params.setSimSizeZ(simVoxSize[2]);
-        params.setCluster(false);
+        params.setCluster(true);
         this.snr = snr;
         this.nCells = nCells;
         this.simOutputDir = GenUtils.openResultsDirectory(String.format("%s%ssim_output%s%s_snr%f_ncells%d", outputDir, File.separator, File.separator, TITLE, this.snr, this.nCells));
