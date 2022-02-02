@@ -6,13 +6,14 @@ import ij.ImageStack;
 import ij.measure.Calibration;
 import ij.plugin.Binner;
 import ij.plugin.SubstackMaker;
+import ij.plugin.ZProjector;
 import ij.process.ImageProcessor;
 import net.calm.embryogen.params.SimParams;
 
 public class StackProcessor {
 
     public static ImagePlus downsizeStack(ImagePlus input, int nx, int ny, int nz, int xBin, int yBin, int stepZ, SimParams params) {
-        ImagePlus subStack = downSizeStack(input, stepZ);
+        ImagePlus subStack = downSizeStackWithProjection(input, stepZ);
         input = null;
         ImageStack binnedStack = binStack(subStack.getImageStack(), xBin, yBin, Binner.SUM);
         ImagePlus imp = new ImagePlus("", binnedStack);
@@ -29,6 +30,17 @@ public class StackProcessor {
     public static ImagePlus downSizeStack(ImagePlus input, int stepZ) {
         int size = input.getNSlices();
         return (new SubstackMaker()).makeSubstack(input, String.format("1-%d-%d", size, stepZ));
+    }
+
+    public static ImagePlus downSizeStackWithProjection(ImagePlus input, int stepZ) {
+        int size = input.getNSlices();
+        ImagePlus output = new ImagePlus();
+        ImageStack stack = new ImageStack(input.getWidth(), input.getHeight());
+        for (int i = 0; i < size; i += stepZ) {
+            stack.addSlice(ZProjector.run(input, "sum", i, i + stepZ).getProcessor());
+        }
+        output.setStack(stack);
+        return output;
     }
 
     public static ImageStack binStack(ImageStack input, int xBin, int yBin, int binningMethod) {

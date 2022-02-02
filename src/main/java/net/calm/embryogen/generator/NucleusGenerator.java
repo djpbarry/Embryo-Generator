@@ -37,9 +37,9 @@ public class NucleusGenerator {
                 a[i].setY(0.4 * Ly + 0.2 * Ly * r.nextDouble());
                 a[i].setZ(0.4 * Lz + 0.2 * Lz * r.nextDouble());
             } else {
-                a[i].setX(Lx * r.nextDouble());
-                a[i].setY(Ly * r.nextDouble());
-                a[i].setZ(Lz * r.nextDouble());
+                a[i].setX(Lx * (0.5 + 0.2 * r.nextGaussian()));
+                a[i].setY(Ly * (0.5 + 0.2 * r.nextGaussian()));
+                a[i].setZ(Lz * (0.5 + 0.1 * r.nextGaussian()));
             }
             a[i].setxLength(params.getA() + 0.2 * params.getA() * r.nextGaussian());
             a[i].setyLength(params.getB() + 0.2 * params.getB() * r.nextGaussian());

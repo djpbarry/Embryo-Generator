@@ -44,7 +44,7 @@ public class Image_Simulator {
     private final double Lz; //domain size
 
     double eps = 1.0, gam = 20.0;
-    double distanceThreshold = 75.0;
+    double distanceThreshold = 100.0;
     double blurRadius = 1.5;
     int maxframe;
 
@@ -71,7 +71,7 @@ public class Image_Simulator {
 
     private final SimParams params;
 
-    private final boolean makeMembranes = true;
+    private final boolean makeMembranes;
 
     /**
      * @param args the command line arguments
@@ -86,12 +86,14 @@ public class Image_Simulator {
         int lx = (int) Math.round(Double.parseDouble(args[6]));
         int ly = (int) Math.round(Double.parseDouble(args[7]));
         int lz = (int) Math.round(Double.parseDouble(args[8]));
+        boolean duo = Boolean.parseBoolean(args[11]);
+        boolean random = Boolean.parseBoolean(args[12]);
         System.setProperty("java.awt.headless", "true");
-        (new Image_Simulator(new double[]{px, py, pz}, new double[]{sx, sy, sz}, new int[]{lx, ly, lz}, Double.parseDouble(args[9]), Integer.parseInt(args[10]), args[11])).run();
+        (new Image_Simulator(new double[]{px, py, pz}, new double[]{sx, sy, sz}, new int[]{lx, ly, lz}, Double.parseDouble(args[9]), Integer.parseInt(args[10]), args[13], random, duo)).run();
         System.exit(0);
     }
 
-    public Image_Simulator(double[] outputVoxSize, double[] simVoxSize, int[] domainSize, double snr, int nCells, String outputDir) {
+    public Image_Simulator(double[] outputVoxSize, double[] simVoxSize, int[] domainSize, double snr, int nCells, String outputDir, boolean random, boolean twoChannel) {
         this.params = new SimParams();
         params.setOutputSizeX(outputVoxSize[0]);
         params.setOutputSizeY(outputVoxSize[1]);
@@ -99,7 +101,7 @@ public class Image_Simulator {
         params.setSimSizeX(simVoxSize[0]);
         params.setSimSizeY(simVoxSize[1]);
         params.setSimSizeZ(simVoxSize[2]);
-        params.setCluster(true);
+        params.setCluster(!random);
         this.snr = snr;
         this.nCells = nCells;
         this.simOutputDir = GenUtils.openResultsDirectory(String.format("%s%ssim_output%s%s_snr%f_ncells%d", outputDir, File.separator, File.separator, TITLE, this.snr, this.nCells));
@@ -111,6 +113,7 @@ public class Image_Simulator {
         this.Lx = domainSize[0];
         this.Ly = domainSize[1];
         this.Lz = domainSize[2];
+        this.makeMembranes = twoChannel;
     }
 
     public void run() {
@@ -151,13 +154,13 @@ public class Image_Simulator {
 
         if (makeMembranes) {
             ImagePlus cellMembraneOutput = generateCellMembraneStack(nx, ny, nz, a);
-//        saveStack(cellMembraneOutput, "raw_cell_membrane_image.tif");
+//            StackSaver.saveStack(cellMembraneOutput, "raw_cell_membrane_image.tif", simOutputDir);
             System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Blurring membrane image..."));
             GaussianBlur3D.blur(cellMembraneOutput, blurRadius / params.getSimSizeX(), blurRadius / params.getSimSizeY(), blurRadius / params.getSimSizeZ());
-//        saveStack(cellMembraneOutput, "blurred_cell_membrane_image.tif");
+//            StackSaver.saveStack(cellMembraneOutput, "blurred_cell_membrane_image.tif", simOutputDir);
             System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Downsizing membrane image..."));
             ImagePlus downSizedCellMembraneImage = StackProcessor.downsizeStack(cellMembraneOutput, nx, ny, nz, xBin, yBin, stepZ, params);
-//        saveStack(downSizedCellMembraneImage, "downsized_cell_membrane_image.tif");
+//            StackSaver.saveStack(downSizedCellMembraneImage, "downsized_cell_membrane_image.tif", simOutputDir);
             System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Adding noise to membrane image..."));
             NoiseGenerator.addNoise(downSizedCellMembraneImage.getImageStack(), snr);
             System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Saving final output..."));
@@ -169,7 +172,7 @@ public class Image_Simulator {
         saveNucleiGroundTruth(nx, ny, nz, a);
 
         try {
-            DataWriter.saveResultsTable(resultsTable, new File(String.format("%s%s%s_snr%f_ncells%d.csv", membraneGroundTruthDir, File.separator, "Ground_Truth_Data", snr, nCells)));
+            DataWriter.saveResultsTable(resultsTable, new File(String.format("%s%s%s_snr%f_ncells%d.csv", membraneGroundTruthDir, File.separator, "Ground_Truth_Data", snr, nCells)), false, true);
         } catch (IOException e) {
             GenUtils.logError(e, "Error saving ground truth data.");
         }
@@ -190,20 +193,20 @@ public class Image_Simulator {
         BinaryProcessor bp = new BinaryProcessor(params);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Generating nuclei centroid image..."));
         ImageHandler pointImage = bp.generatePointImage(nx, ny, nz, a);
-//        saveStack(pointImage.getImagePlus(), "point_image.tif");
+//        StackSaver.saveStack(pointImage.getImagePlus(), "point_image.tif", simOutputDir);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Generating EDT..."));
         ImageHandler edt = EDT.run(pointImage, 1, true, -1);
-//        saveStack(edt.getImagePlus(), "edt_image.tif");
+//        StackSaver.saveStack(edt.getImagePlus(), "edt_image.tif", simOutputDir);
         ImageHandler edtDup = edt.duplicate();
         float edtMaxValue = (float) edtDup.getMax();
         edtDup.invert();
         edtDup.addValue(edtMaxValue + 1.0f);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Thresholding EDT..."));
         ImageStack thresholdedEDT = bp.getThresholdedEDT(nx, ny, nz, edtDup, distanceThreshold);
-//        saveStack(new ImagePlus("", thresholdedEDT), "thresh_edt_image.tif");
+//        StackSaver.saveStack(new ImagePlus("", thresholdedEDT), "thresh_edt_image.tif", simOutputDir);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Outlining EDT..."));
         ImageStack edtOutline = bp.outlineMask(nx, ny, nz, thresholdedEDT);
-//        saveStack(new ImagePlus("", edtOutline), "outlined_edt_image.tif");
+//        StackSaver.saveStack(new ImagePlus("", edtOutline), "outlined_edt_image.tif", simOutputDir);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Running watershed..."));
         Watershed3D watershed = new Watershed3D(edtDup, pointImage, distanceThreshold, 1);
         ImageHandler watershedDams = watershed.getDamImage();
@@ -216,7 +219,7 @@ public class Image_Simulator {
         pointImage = null;
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Summing outline and watershed dams..."));
         ImageStack voronoiPlusMaskOutline = bp.getVoronoiPlusMaskOutline(nx, ny, nz, edtOutline, watershedDams);
-//        saveStack(new ImagePlus("", voronoiPlusMaskOutline), "dams_plus_outline_image.tif");
+//        StackSaver.saveStack(new ImagePlus("", voronoiPlusMaskOutline), "dams_plus_outline_image.tif", simOutputDir);
         watershedDams = null;
         edtOutline = null;
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Summing watershed dams and EDT..."));

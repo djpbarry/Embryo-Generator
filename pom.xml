@@ -127,23 +127,7 @@
         <dependency>
             <groupId>net.calm</groupId>
             <artifactId>iaclasslibrary</artifactId>
-            <version>1.0.1</version>
-        </dependency>
-        <dependency>
-            <groupId>com.github.mcib3d</groupId>
-            <artifactId>mcib3d-core</artifactId>
-            <version>3.96.3</version>
-        </dependency>
-        <dependency>
-            <groupId>com.github.mcib3d</groupId>
-            <artifactId>mcib3d-plugins</artifactId>
-            <version>3.96.3</version>
-            <exclusions>
-                <exclusion>
-                    <groupId>sc.fiji</groupId>
-                    <artifactId>imageware</artifactId>
-                </exclusion>
-            </exclusions>
+            <version>1.0.8</version>
         </dependency>
         <dependency>
             <groupId>org.apache.commons</groupId>
