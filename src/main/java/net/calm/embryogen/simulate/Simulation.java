@@ -2,7 +2,7 @@ package net.calm.embryogen.simulate;
 
 import ij.IJ;
 import ij.ImageStack;
-import net.calm.embryogen.image_simulator.Nucleus;
+import net.calm.embryogen.image_simulator.NucleusGroup;
 import net.calm.embryogen.intensity.IntensThread;
 import net.calm.embryogen.params.SimParams;
 
@@ -30,13 +30,13 @@ public class Simulation {
         this.count_BM = 0;
     }
 
-    public void simulation(Nucleus[] a, ImageStack output) {
+    public void simulation(NucleusGroup[] a, ImageStack output) {
         //if (params.isCluster()) initial_relaxation(a);
         initial_relaxation(a);
         Tanh_blob(a, output);
     }
 
-    void initial_relaxation(Nucleus[] a) {
+    void initial_relaxation(NucleusGroup[] a) {
         int i, imax;
         double Dxc, Dyc, Dzc;
 
@@ -59,7 +59,7 @@ public class Simulation {
 
     }
 
-    void Tanh_blob(Nucleus[] a, ImageStack output) {
+    void Tanh_blob(NucleusGroup[] a, ImageStack output) {
         int nbCPUs = Runtime.getRuntime().availableProcessors();
         IntensThread[] intensThreads = new IntensThread[nbCPUs];
         for (int thread = 0; thread < nbCPUs; thread++) {
@@ -76,8 +76,8 @@ public class Simulation {
 
     }
 
-    void Euler_Method(Nucleus[] a) {
-        Nucleus[] temp = new Nucleus[a.length];
+    void Euler_Method(NucleusGroup[] a) {
+        NucleusGroup[] temp = new NucleusGroup[a.length];
 
         double xi;
         double xij, yij, zij, rij, Fijx, Fijy, Fijz;
@@ -95,9 +95,9 @@ public class Simulation {
 
             for (j = 0; j < a.length; j++) {
                 if (j != i) {
-                    xij = a[j].getX() - a[i].getX();
-                    yij = a[j].getY() - a[i].getY();
-                    zij = a[j].getZ() - a[i].getZ();
+                    xij = a[j].getParent().getX() - a[i].getParent().getX();
+                    yij = a[j].getParent().getY() - a[i].getParent().getY();
+                    zij = a[j].getParent().getZ() - a[i].getParent().getZ();
 
                     rij = Math.sqrt(xij * xij + yij * yij + zij * zij);
                     Fijx += eps * (-3.0 * Math.pow(gam, 3.0) / Math.pow(rij, 5.0) + gam / Math.pow(rij, 3.0)) * (-xij);
@@ -108,33 +108,33 @@ public class Simulation {
             }
 
             xi = Box_Muller_Method(0.0, 1.0);
-            temp[i].setX(a[i].getX() - Fijx * params.getDT() + Math.sqrt(2.0 * params.getDx()) * Math.sqrt(params.getDT()) * xi);
+            temp[i].getParent().setX(a[i].getParent().getX() - Fijx * params.getDT() + Math.sqrt(2.0 * params.getDx()) * Math.sqrt(params.getDT()) * xi);
 
-            if (temp[i].getX() < 0) {
-                temp[i].setX(0.0);
+            if (temp[i].getParent().getX() < 0) {
+                temp[i].getParent().setX(0.0);
             }
-            if (temp[i].getX() > Lx) {
-                temp[i].setX(Lx);
-            }
-
-            xi = Box_Muller_Method(0.0, 1.0);
-            temp[i].setY(a[i].getY() - Fijy * params.getDT() + Math.sqrt(2.0 * params.getDy()) * Math.sqrt(params.getDT()) * xi);
-
-            if (temp[i].getY() < 0) {
-                temp[i].setY(0.0);
-            }
-            if (temp[i].getY() > Ly) {
-                temp[i].setY(Ly);
+            if (temp[i].getParent().getX() > Lx) {
+                temp[i].getParent().setX(Lx);
             }
 
             xi = Box_Muller_Method(0.0, 1.0);
-            temp[i].setZ(a[i].getZ() - Fijz * params.getDT() + Math.sqrt(2.0 * params.getDz()) * Math.sqrt(params.getDT()) * xi);
+            temp[i].getParent().setY(a[i].getParent().getY() - Fijy * params.getDT() + Math.sqrt(2.0 * params.getDy()) * Math.sqrt(params.getDT()) * xi);
 
-            if (temp[i].getZ() < 0) {
-                temp[i].setZ(0.0);
+            if (temp[i].getParent().getY() < 0) {
+                temp[i].getParent().setY(0.0);
             }
-            if (temp[i].getZ() > Lz) {
-                temp[i].setZ(Lz);
+            if (temp[i].getParent().getY() > Ly) {
+                temp[i].getParent().setY(Ly);
+            }
+
+            xi = Box_Muller_Method(0.0, 1.0);
+            temp[i].getParent().setZ(a[i].getParent().getZ() - Fijz * params.getDT() + Math.sqrt(2.0 * params.getDz()) * Math.sqrt(params.getDT()) * xi);
+
+            if (temp[i].getParent().getZ() < 0) {
+                temp[i].getParent().setZ(0.0);
+            }
+            if (temp[i].getParent().getZ() > Lz) {
+                temp[i].getParent().setZ(Lz);
             }
 
         }

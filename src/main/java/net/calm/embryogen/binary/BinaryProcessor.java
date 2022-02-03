@@ -8,6 +8,7 @@ import ij.process.ImageProcessor;
 import mcib3d.image3d.ImageHandler;
 import mcib3d.image3d.ImageInt;
 import net.calm.embryogen.image_simulator.Nucleus;
+import net.calm.embryogen.image_simulator.NucleusGroup;
 import net.calm.embryogen.params.SimParams;
 
 public class BinaryProcessor {
@@ -17,7 +18,7 @@ public class BinaryProcessor {
         this.params = params;
     }
 
-    public ImageHandler generatePointImage(int nx, int ny, int nz, Nucleus[] a) {
+    public ImageHandler generatePointImage(int nx, int ny, int nz, NucleusGroup[] a) {
         ImageStack pointOutput = new ImageStack(nx, ny);
         for (int n = 1; n <= nz; n++) {
             ByteProcessor slice = new ByteProcessor(nx, ny);
@@ -26,9 +27,9 @@ public class BinaryProcessor {
             pointOutput.addSlice(slice);
         }
         for (int i = 0; i < a.length; i++) {
-            int x = (int) Math.round(a[i].getX() / params.getSimSizeX());
-            int y = (int) Math.round(a[i].getY() / params.getSimSizeY());
-            int z = (int) Math.round(a[i].getZ() / params.getSimSizeZ());
+            int x = (int) Math.round(a[i].getParent().getX() / params.getSimSizeX());
+            int y = (int) Math.round(a[i].getParent().getY() / params.getSimSizeY());
+            int z = (int) Math.round(a[i].getParent().getZ() / params.getSimSizeZ());
             pointOutput.setVoxel(x, y, z, 255);
         }
         ImageHandler intImage = ImageInt.wrap(pointOutput);

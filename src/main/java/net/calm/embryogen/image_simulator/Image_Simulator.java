@@ -125,7 +125,7 @@ public class Image_Simulator {
         System.out.println(String.format("Output_Size_Y = %f", params.getOutputSizeY()));
         System.out.println(String.format("Output_Size_Z = %f", params.getOutputSizeZ()));
         System.out.println(String.format("SNR = %f", snr));
-        Nucleus[] a = new Nucleus[nCells];
+        NucleusGroup[] a = new NucleusGroup[nCells];
         int tmax = (int) Math.round(1.5 / params.getDT());
         maxframe = (int) Math.round(tmax * params.getDT() * params.getFramerate());
 
@@ -145,9 +145,9 @@ public class Image_Simulator {
         StackSaver.saveNucleiStack(downSizedNucleiImage, simOutputDir);
 
         for (int i = 0; i < a.length; i++) {
-            resultsTable.setValue("Nucleus_Centroid_X", i, a[i].getX());
-            resultsTable.setValue("Nucleus_Centroid_Y", i, a[i].getY());
-            resultsTable.setValue("Nucleus_Centroid_Z", i, a[i].getZ());
+            resultsTable.setValue("Nucleus_Centroid_X", i, a[i].getParent().getX());
+            resultsTable.setValue("Nucleus_Centroid_Y", i, a[i].getParent().getY());
+            resultsTable.setValue("Nucleus_Centroid_Z", i, a[i].getParent().getZ());
         }
 
         String outputFilename = String.format("Sim_Image_snr%f_ncells%d.tif", snr, nCells);
@@ -180,7 +180,7 @@ public class Image_Simulator {
         IJ.log(String.format("Done %s", TimeAndDate.getCurrentTimeAndDate()));
     }
 
-    ImageStack generateNucleiStack(int nx, int ny, int nz, Nucleus[] a) {
+    ImageStack generateNucleiStack(int nx, int ny, int nz, NucleusGroup[] a) {
         ImageStack nucleiOutput = new ImageStack(nx, ny);
         for (int n = 1; n <= nz; n++) {
             nucleiOutput.addSlice(new FloatProcessor(nx, ny));
@@ -189,7 +189,7 @@ public class Image_Simulator {
         return nucleiOutput;
     }
 
-    ImagePlus generateCellMembraneStack(int nx, int ny, int nz, Nucleus[] a) {
+    ImagePlus generateCellMembraneStack(int nx, int ny, int nz, NucleusGroup[] a) {
         BinaryProcessor bp = new BinaryProcessor(params);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Generating nuclei centroid image..."));
         ImageHandler pointImage = bp.generatePointImage(nx, ny, nz, a);
@@ -226,23 +226,23 @@ public class Image_Simulator {
         return bp.getVoronoiPlusEDT(nz, voronoiPlusMaskOutline, edt, thresholdedEDT);
     }
 
-    void saveNucleiGroundTruth(int nx, int ny, int nz, Nucleus[] a) {
+    void saveNucleiGroundTruth(int nx, int ny, int nz, NucleusGroup[] a) {
         BinaryProcessor bp = new BinaryProcessor(params);
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Generating nuclei ground truth image..."));
         ImageHandler pointImage = bp.generatePointImage(nx, ny, nz, a);
         StackSaver.saveGroundTruth(pointImage.getImagePlus(), nucleiGroundTruthDir, 255);
     }
 
-    void printGroundTruthResults(ImageStack binnedStack, int nx, int ny, int nz, Nucleus[] a) {
+    void printGroundTruthResults(ImageStack binnedStack, int nx, int ny, int nz, NucleusGroup[] a) {
         StackStatistics stats = new StackStatistics(new ImagePlus("", binnedStack));
         int[] hist = stats.histogram16;
         double binnedXRes = params.getSimSizeX() * nx / binnedStack.getWidth();
         double binnedYRes = params.getSimSizeY() * ny / binnedStack.getHeight();
         double binnedZRes = params.getSimSizeZ() * nz / binnedStack.getSize();
         for (int i = 0; i < a.length; i++) {
-            int x = (int) Math.round(a[i].getX() / binnedXRes);
-            int y = (int) Math.round(a[i].getY() / binnedYRes);
-            int z = (int) Math.round(a[i].getZ() / binnedZRes);
+            int x = (int) Math.round(a[i].getParent().getX() / binnedXRes);
+            int y = (int) Math.round(a[i].getParent().getY() / binnedYRes);
+            int z = (int) Math.round(a[i].getParent().getZ() / binnedZRes);
             if (z >= binnedStack.getSize()) z = binnedStack.getSize() - 1;
             int index = (int) Math.round(binnedStack.getVoxel(x, y, z));
             double vol = hist[index] * binnedXRes * binnedYRes * binnedZRes;
