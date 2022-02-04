@@ -29,9 +29,13 @@ public class NucleusGenerator {
         System.out.println(String.format("%s %s", TimeAndDate.getCurrentTimeAndDate(), "Initialising nuclei..."));
         //setting the initial positions of particle
         for (int i = 0; i < nCells; i++) {
+            int nChildren = r.nextDouble() < 0.01 ? (int) Math.round(Math.abs(10.0 * r.nextDouble())) : 0;
             a[i] = new NucleusGroup(
-                    new Nucleus(new double[]{Lx / 2.0, Ly / 2.0, Lz / 2.0}, new double[]{params.getA(), params.getB(), params.getC()}, r, params.getPositionAdjustment()),
-                    (int) Math.round(Math.abs(10.0 * r.nextGaussian())));
+                    new Nucleus(
+                            new double[]{Lx / 2.0, Ly / 2.0, Lz / 2.0},
+                            new double[]{params.getA(), params.getB(), params.getC()},
+                            r, params.getPositionAdjustment()),
+                    nChildren);
         }
     }
 }

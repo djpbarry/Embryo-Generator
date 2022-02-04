@@ -23,9 +23,9 @@ public class NucleusGroup {
         };
         for (int i = 0; i < nChildren; i++) {
             double[] childInitCoords = new double[]{
-                    parent.getX() + Math.max(parentNucDims[0], parentNucDims[1]) * r.nextGaussian(),
-                    parent.getY() + Math.max(parentNucDims[0], parentNucDims[1]) * r.nextGaussian(),
-                    parent.getZ() + 0.5 * parentNucDims[2] * r.nextGaussian()};
+                    parent.getX() + 0.75 * parentNucDims[0] * r.nextGaussian(),
+                    parent.getY() + 0.75 * parentNucDims[1] * r.nextGaussian(),
+                    parent.getZ() + 0.25 * parentNucDims[2] * r.nextGaussian()};
             children.add(
                     new Nucleus(childInitCoords, childNucDims, parent.getR(), Nucleus.FIXED));
         }

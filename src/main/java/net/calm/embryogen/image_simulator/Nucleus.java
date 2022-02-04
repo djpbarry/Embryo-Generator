@@ -64,8 +64,8 @@ public class Nucleus {
                 this.setY(initialCoords[1]);
                 this.setZ(initialCoords[2]);
         }
-        this.setxLength(nuclearDimensions[0] + 0.2 * nuclearDimensions[0] * r.nextGaussian());
-        this.setyLength(nuclearDimensions[1] + 0.2 * nuclearDimensions[1] * r.nextGaussian());
+        this.setxLength(nuclearDimensions[0] + 0.1 * nuclearDimensions[0] * r.nextGaussian());
+        this.setyLength(nuclearDimensions[1] + 0.1 * nuclearDimensions[1] * r.nextGaussian());
         this.setzLength(nuclearDimensions[2] + 0.2 * nuclearDimensions[2] * r.nextGaussian());
     }
 
