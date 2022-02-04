@@ -30,7 +30,7 @@ public class NucleusGenerator {
         //setting the initial positions of particle
         for (int i = 0; i < nCells; i++) {
             a[i] = new NucleusGroup(
-                    new Nucleus(new double[]{Lx / 2.0, Ly / 2.0, Lz / 2.0}, new double[]{params.getA(), params.getB(), params.getC()}, r, params.isCluster()),
+                    new Nucleus(new double[]{Lx / 2.0, Ly / 2.0, Lz / 2.0}, new double[]{params.getA(), params.getB(), params.getC()}, r, params.getPositionAdjustment()),
                     (int) Math.round(Math.abs(10.0 * r.nextGaussian())));
         }
     }

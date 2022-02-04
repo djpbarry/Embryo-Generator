@@ -1,5 +1,7 @@
 package net.calm.embryogen.params;
 
+import net.calm.embryogen.image_simulator.Nucleus;
+
 public class SimParams {
     private double simSizeX;
     private double simSizeY;
@@ -7,7 +9,7 @@ public class SimParams {
     private double outputSizeX;
     private double outputSizeY;
     private double outputSizeZ;
-    private final double sigma = 2.0, Iback = 100, A = 10.0, B = 7.5, C = 7.5;
+    private final double sigma = 2.0, Iback = 100, A = 10.0, B = 7.5, C = 2.5;
     private final double nucMaxIntens = 1000.0; //mean intensity in nucleus
     private final double nucMinIntens = 0.0;
     private double Dx = 0.0, Dy = 0.0, Dz = 0.0; //Diffusion coefficient in x, y, and z directions
@@ -15,7 +17,7 @@ public class SimParams {
     private final double framerate = 1.0; //frame rate of images
     private final double membraneMinIntensScale = 0.0;
     private final double membraneMaxIntensScale = 1.0;
-    private boolean cluster = false;
+    private int positionAdjustment = Nucleus.RANDOM;
 
     public SimParams() {
 
@@ -137,11 +139,11 @@ public class SimParams {
         return membraneMaxIntensScale;
     }
 
-    public boolean isCluster() {
-        return cluster;
+    public int getPositionAdjustment() {
+        return positionAdjustment;
     }
 
-    public void setCluster(boolean cluster) {
-        this.cluster = cluster;
+    public void setPositionAdjustment(int positionAdjustment) {
+        this.positionAdjustment = positionAdjustment;
     }
 }

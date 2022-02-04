@@ -130,11 +130,11 @@ public class Simulation {
             xi = Box_Muller_Method(0.0, 1.0);
             temp[i].getParent().setZ(a[i].getParent().getZ() - Fijz * params.getDT() + Math.sqrt(2.0 * params.getDz()) * Math.sqrt(params.getDT()) * xi);
 
-            if (temp[i].getParent().getZ() < 0) {
-                temp[i].getParent().setZ(0.0);
+            if (temp[i].getParent().getZ() < 0.4 * Lz) {
+                temp[i].getParent().setZ(0.4 * Lz);
             }
-            if (temp[i].getParent().getZ() > Lz) {
-                temp[i].getParent().setZ(Lz);
+            if (temp[i].getParent().getZ() > 0.6 * Lz) {
+                temp[i].getParent().setZ(0.6 * Lz);
             }
 
         }

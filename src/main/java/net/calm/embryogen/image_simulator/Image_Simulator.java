@@ -101,7 +101,9 @@ public class Image_Simulator {
         params.setSimSizeX(simVoxSize[0]);
         params.setSimSizeY(simVoxSize[1]);
         params.setSimSizeZ(simVoxSize[2]);
-        params.setCluster(!random);
+        if (!random) {
+            params.setPositionAdjustment(Nucleus.CLUSTER);
+        }
         this.snr = snr;
         this.nCells = nCells;
         this.simOutputDir = GenUtils.openResultsDirectory(String.format("%s%ssim_output%s%s_snr%f_ncells%d", outputDir, File.separator, File.separator, TITLE, this.snr, this.nCells));

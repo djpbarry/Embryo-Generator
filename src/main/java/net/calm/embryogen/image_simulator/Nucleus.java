@@ -13,6 +13,9 @@ import static java.lang.Math.PI;
  * @author David Barry <david.barry at crick dot ac dot uk>
  */
 public class Nucleus {
+    public static final int CLUSTER = 0;
+    public static final int RANDOM = 1;
+    public static final int FIXED = 2;
     //x, y, and z coordinates
     private double x;
     private double y;
@@ -30,29 +33,36 @@ public class Nucleus {
     private final Random r;
     private final double[] initialCoords;
     private final double[] nuclearDimensions;
-    private final boolean isCluster;
+    private final int positionAdjustment;
 
 
-    public Nucleus(double[] initialCoords, double[] nuclearDimensions, Random r, boolean isCluster) {
+    public Nucleus(double[] initialCoords, double[] nuclearDimensions, Random r, int positionAdjustment) {
         this.r = r;
         this.initialCoords = initialCoords;
         this.nuclearDimensions = nuclearDimensions;
-        this.isCluster = isCluster;
+        this.positionAdjustment = positionAdjustment;
         initialise();
     }
 
     private void initialise() {
-        this.setTheta_x(0.25 * PI * r.nextFloat());
-        this.setTheta_y(0.25 * PI * r.nextFloat());
-        this.setTheta_z(0.5 * PI * r.nextFloat());
-        if (isCluster) {
-            this.setX(initialCoords[0] * (0.8 + 0.4 * r.nextDouble()));
-            this.setY(initialCoords[1] * (0.8 + 0.4 * r.nextDouble()));
-            this.setZ(initialCoords[2] * (0.8 + 0.4 * r.nextDouble()));
-        } else {
-            this.setX(initialCoords[0] + 0.2 * r.nextGaussian());
-            this.setY(initialCoords[1] + 0.2 * r.nextGaussian());
-            this.setZ(initialCoords[2] + 0.1 * r.nextGaussian());
+        this.setTheta_x(0.01 * PI * r.nextGaussian());
+        this.setTheta_y(0.01 * PI * r.nextGaussian());
+        this.setTheta_z(PI * r.nextFloat());
+        switch (positionAdjustment) {
+            case Nucleus.CLUSTER:
+                this.setX(initialCoords[0] * (0.8 + 0.4 * r.nextDouble()));
+                this.setY(initialCoords[1] * (0.8 + 0.4 * r.nextDouble()));
+                this.setZ(initialCoords[2] * (0.8 + 0.4 * r.nextDouble()));
+                break;
+            case Nucleus.RANDOM:
+                this.setX(initialCoords[0] * (0.1 + 1.8 * r.nextDouble()));
+                this.setY(initialCoords[1] * (0.1 + 1.8 * r.nextDouble()));
+                this.setZ(initialCoords[2] * (0.9 + 0.2 * r.nextDouble()));
+                break;
+            default:
+                this.setX(initialCoords[0]);
+                this.setY(initialCoords[1]);
+                this.setZ(initialCoords[2]);
         }
         this.setxLength(nuclearDimensions[0] + 0.2 * nuclearDimensions[0] * r.nextGaussian());
         this.setyLength(nuclearDimensions[1] + 0.2 * nuclearDimensions[1] * r.nextGaussian());
